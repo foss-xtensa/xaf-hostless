@@ -1,0 +1,17 @@
+xaf_get_verinfo
+xaf_adev_open
+xaf_adev_close
+xaf_comp_create
+xaf_comp_delete
+xaf_comp_set_config
+xaf_comp_get_config
+xaf_comp_process
+xaf_comp_get_status
+xaf_connect
+xf_trace
+xf_trace_init
+xa_audio_codec_factory
+xa_mixer_factory
+xa_renderer_factory
+xa_capturer_factory
+xaf_get_mem_stats

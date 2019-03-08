@@ -1,0 +1,108 @@
+#
+# Copyright (c) 2015-2019 Cadence Design Systems, Inc.
+# 
+# Permission is hereby granted, free of charge, to any person obtaining
+# a copy of this software and associated documentation files (the
+# "Software"), to use this Software with Cadence processor cores only and 
+# not with any other processors and platforms, subject to
+# the following conditions:
+# 
+# The above copyright notice and this permission notice shall be included
+# in all copies or substantial portions of the Software.
+# 
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+# EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+# MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+# IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+# CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+# TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+# SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+#
+
+======================================================================
+Xtensa Audio Framework (XAF) - Hostless solution
+======================================================================
+
+======================================================================
+Revision History
+======================================================================
+
+Version 1.4 API 1.1 : March 11, 2019
+
++ GA release.
+
+----------------------------------------------------------------------
+Version 1.3p4_Alpha API 1.1 : August 30, 2018
+
++ Patch release - HiFi3 and HiFi4 only
++ Built with RG.5 tools
+
++ [J2117] Fixed an issue in xaf_adev_close function (ensured internal 
+  proxy thread is closed properly).
++ [J2118] Sample Rate Convertor plugin wrapper is updated to work 
+  with Sample Rate Convertor v1.9 Library.
+
++ Updated Programmers Guide to indicate 
+  - XAF must not be used with fast functional 'TurboSim' mode of 
+    Instruction Set Simulator.
+  - Sample Rate Convertor plugin wrapper is updated to work with 
+    Sample Rate Convertor v1.9 Library.
+
+----------------------------------------------------------------------
+Version 1.3p3_Alpha API 1.1 : March 12, 2018
+
++ Patch release 
++ Built with RG.5 tools
+
++ [J2004] Fixed an issue in compilation of ISR code (removed -mcoproc
+  compile flag for ISR code). 
+
+----------------------------------------------------------------------
+Version 1.3p2_Alpha API 1.1 : February 2, 2018
+
++ Patch release - HiFi4 only
++ Built with RG.5 tools
+
++ Fixed issues in packaging of release packages.
+
+----------------------------------------------------------------------
+Version 1.3p1_Alpha API 1.1 : February 1, 2018
+
++ Patch release - HiFi3, HiFi4 only
++ Built with RG.5 tools
+
++ [J1965] Avoided use of cache line size (core specific) while 
+  calculating size of cache line aligned DSP Thread Handle struct.  
+
+----------------------------------------------------------------------
+Version 1.3_Alpha API 1.1 : December 14, 2017
+
++ Initial (Alpha) customer release. 
+
+----------------------------------------------------------------------
+Version 1.2 API 1.1 : November 21, 2016
+
++ Known issues in Release 1.1 fixed.
++ Added support for renderer and capturer components.
++ Added AAC-Dec, Renderer, Capturer, SRC components along with
+   corresponding test benches.
++ Testbenches updated for Realtek ALC5677 EVM.
+
+----------------------------------------------------------------------
+Version 1.1 API 1.1 : June 2, 2016
+
++ Known issues in Release 1.0 fixed.
++ Added testbenches for mixer, audio encoder and speech decoder.
++ Improved robustness and minor changes in API.
+
+----------------------------------------------------------------------
+Version 1.0 API 1.0 : March 04, 2016
+
++ Initial release.
+
+----------------------------------------------------------------------
+Version 0.7 API 1.0 : December 17, 2015
+
++ Beta release.
+
+----------------------------------------------------------------------
