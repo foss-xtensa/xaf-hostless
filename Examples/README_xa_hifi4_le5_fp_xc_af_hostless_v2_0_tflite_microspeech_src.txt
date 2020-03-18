@@ -31,3 +31,4 @@ is used for the integration.
 + Import the project and build the target testxa_af_hostless  in Release mode (this would build the library projects libxa_af_hostless
 and libmicro_speech by default).
 + Default run is taking the input available at workspace_loc\testxa_af_hostless\capturer_in.pcm
+
