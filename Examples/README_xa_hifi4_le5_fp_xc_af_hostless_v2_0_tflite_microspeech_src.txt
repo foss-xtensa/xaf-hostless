@@ -1,7 +1,10 @@
 =====================================================================================
 XAF Hostless example implementation of a Yes/No speech recognizer
 =====================================================================================
-This is an example implementation of a Yes/No Speech recognizer.  The source code for this implementation is open sourced by Google at “insert the URL for TFLM here”.  Both the front end processing as well as the inference engine are created as XAF components.  The capturer XAF component reads speech samples from a file, and then passes them onto the Front End XAF component, which outputs the spectrogram samples buffered over a period of one second to the Inference Engine XAF component.  The Inference Engine XAF component includes the interpreter as well as the optimized operators.  The output of the Inference Engine is the probability of recognizing Yes, No, Silence or Unknown.
+This is an example implementation of a Yes/No Speech recognizer.  The source code for this implementation is open sourced by Google 
+at “insert the URL for TFLM here”.  Both the front end processing as well as the inference engine are created as XAF components.  
+The capturer XAF component reads speech samples from a file, and then passes them onto the Front End XAF component, which outputs 
+the spectrogram samples buffered over a period of one second to the Inference Engine XAF component.  The Inference Engine XAF component includes the interpreter as well as the optimized operators.  The output of the Inference Engine is the probability of recognizing Yes, No, Silence or Unknown.
 
 + Built with RI.2 tools and tested on AE_HiFI4_LE5_FP_XC core
 + XAF version 2.0 and tensorflow version (on top of this commit 62adf994a61435e74628a178dcd8845b99d73bfd, integrated hifi4 NN Lib v2.1 ) is used for the integration.
