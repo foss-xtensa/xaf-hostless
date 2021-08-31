@@ -1,15 +1,17 @@
-/*******************************************************************************
-* Copyright (c) 2015-2020 Cadence Design Systems, Inc.
-* 
+/*
+* Copyright (c) 2015-2021 Cadence Design Systems Inc.
+*
 * Permission is hereby granted, free of charge, to any person obtaining
 * a copy of this software and associated documentation files (the
-* "Software"), to use this Software with Cadence processor cores only and 
-* not with any other processors and platforms, subject to
+* "Software"), to deal in the Software without restriction, including
+* without limitation the rights to use, copy, modify, merge, publish,
+* distribute, sublicense, and/or sell copies of the Software, and to
+* permit persons to whom the Software is furnished to do so, subject to
 * the following conditions:
-* 
+*
 * The above copyright notice and this permission notice shall be included
 * in all copies or substantial portions of the Software.
-* 
+*
 * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
 * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
 * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
@@ -17,8 +19,7 @@
 * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
 * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-******************************************************************************/
+*/
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -32,7 +33,8 @@
 #include "xaf-fio-test.h"
 
 #define TESTBENCH_USAGE FIO_PRINTF(stdout, "\nUsage: %s -infile:<>.pcm -infile:<>.pcm -outfile:<>.pcm -outfile:<>.pcm\n", argv[0]);\
-    FIO_PRINTF(stdout, "\nNote: Renderer-plugin writes output to the file named 'renderer_out.pcm' in the execution directory.\n\n");
+    FIO_PRINTF(stdout, "\nNote: Renderer-plugin writes output to the file named 'renderer_out.pcm' in the execution directory.\n");\
+    FIO_PRINTF(stdout, "\nNote: This testbench does not support runtime commands for the 'Renderer' component.\n\n");
 
 #define AUDIO_FRMWK_BUF_SIZE   (256 << 12)
 #define AUDIO_COMP_BUF_SIZE    (1024 << 12)
@@ -99,12 +101,17 @@ XA_ERRORCODE xa_vorbis_decoder(xa_codec_handle_t var1, WORD32 var2, WORD32 var3,
 XA_ERRORCODE xa_dummy_aec22(xa_codec_handle_t var1, WORD32 var2, WORD32 var3, pVOID var4){return 0;}
 //XA_ERRORCODE xa_dummy_aec23(xa_codec_handle_t var1, WORD32 var2, WORD32 var3, pVOID var4){return 0;}
 XA_ERRORCODE xa_pcm_split(xa_codec_handle_t var1, WORD32 var2, WORD32 var3, pVOID var4){return 0;}
-XA_ERRORCODE xa_pcm_mix(xa_codec_handle_t var1, WORD32 var2, WORD32 var3, pVOID var4){return 0;}
+XA_ERRORCODE xa_mimo_mix(xa_codec_handle_t var1, WORD32 var2, WORD32 var3, pVOID var4){return 0;}
 XA_ERRORCODE xa_dummy_wwd(xa_codec_handle_t p_xa_module_obj, WORD32 i_cmd, WORD32 i_idx, pVOID pv_value) {return 0;}
 XA_ERRORCODE xa_dummy_hbuf(xa_codec_handle_t p_xa_module_obj, WORD32 i_cmd, WORD32 i_idx, pVOID pv_value) {return 0;}
 XA_ERRORCODE xa_opus_encoder(xa_codec_handle_t p_xa_module_obj, WORD32 i_cmd, WORD32 i_idx, pVOID pv_value) {return 0;}
 XA_ERRORCODE xa_dummy_wwd_msg(xa_codec_handle_t var1, WORD32 var2, WORD32 var3, pVOID var4){return 0;}
 XA_ERRORCODE xa_dummy_hbuf_msg(xa_codec_handle_t var1, WORD32 var2, WORD32 var3, pVOID var4){return 0;}
+XA_ERRORCODE xa_opus_decoder(xa_codec_handle_t p_xa_module_obj, WORD32 i_cmd, WORD32 i_idx, pVOID pv_value) {return 0;}
+XA_ERRORCODE xa_microspeech_fe(xa_codec_handle_t var1, WORD32 var2, WORD32 var3, pVOID var4){return 0;}
+XA_ERRORCODE xa_microspeech_inference(xa_codec_handle_t var1, WORD32 var2, WORD32 var3, pVOID var4){return 0;}
+XA_ERRORCODE xa_person_detect_inference(xa_codec_handle_t var1, WORD32 var2, WORD32 var3, pVOID var4){return 0;}
+XA_ERRORCODE xa_keyword_detection_inference(xa_codec_handle_t var1, WORD32 var2, WORD32 var3, pVOID var4){return 0;}
 
 #define MAX_INP_STRMS           2
 #define MAX_OUT_STRMS           2
@@ -181,32 +188,43 @@ static int aec23_setup(void *p_comp, xaf_format_t *p_format, int nvar_args, ...)
 
 static int pcm_gain_setup(void *p_comp, xaf_format_t *p_format, int nvar_args, ...)
 {
-#define PCM_GAIN_NUM_SET_PARAMS	5
-    int param[PCM_GAIN_NUM_SET_PARAMS*2];
-    int gain_idx = PCM_GAIN_IDX_FOR_GAIN;         //gain index range is 0 to 6 -> {0db, -6db, -12db, -18db, 6db, 12db, 18db}
+#define PCM_GAIN_NUM_SET_PARAMS 5
+    int param[(PCM_GAIN_NUM_SET_PARAMS + 1) * 2];
+    int probe_enabled;
     int frame_size = XAF_INBUF_SIZE;
 
     va_list varg_list;
     va_start(varg_list, nvar_args);
 
+    int gain_idx = PCM_GAIN_IDX_FOR_GAIN;    //gain index range is 0 to 6 -> {0db, -6db, -12db, -18db, 6db, 12db, 18db}
     frame_size = va_arg(varg_list, int);
 
-    param[0*2+0] = XA_PCM_GAIN_CONFIG_PARAM_CHANNELS;
-    param[0*2+1] = p_format->channels;
-    param[1*2+0] = XA_PCM_GAIN_CONFIG_PARAM_SAMPLE_RATE;
-    param[1*2+1] = p_format->sample_rate;
-    param[2*2+0] = XA_PCM_GAIN_CONFIG_PARAM_PCM_WIDTH;
-    param[2*2+1] = p_format->pcm_width;
-    param[3*2+0] = XA_PCM_GAIN_CONFIG_PARAM_FRAME_SIZE;
-    param[3*2+1] = frame_size;
-    param[4*2+0] = XA_PCM_GAIN_CONFIG_PARAM_GAIN_FACTOR;
-    param[4*2+1] = gain_idx;
+    param[0 * 2 + 0] = XA_PCM_GAIN_CONFIG_PARAM_CHANNELS;
+    param[0 * 2 + 1] = p_format->channels;
+    param[1 * 2 + 0] = XA_PCM_GAIN_CONFIG_PARAM_SAMPLE_RATE;
+    param[1 * 2 + 1] = p_format->sample_rate;
+    param[2 * 2 + 0] = XA_PCM_GAIN_CONFIG_PARAM_PCM_WIDTH;
+    param[2 * 2 + 1] = p_format->pcm_width;
+    param[3 * 2 + 0] = XA_PCM_GAIN_CONFIG_PARAM_FRAME_SIZE;
+    param[3 * 2 + 1] = frame_size;
+    param[4 * 2 + 0] = XA_PCM_GAIN_CONFIG_PARAM_GAIN_FACTOR;
+    param[4 * 2 + 1] = gain_idx;
 
+    probe_enabled = va_arg(varg_list, int);
+    if (probe_enabled)
+    {
+        param[5 * 2 + 0] = XAF_COMP_CONFIG_PARAM_PROBE_ENABLE;
+        param[5 * 2 + 1] = va_arg(varg_list, int);
+
+        fprintf(stderr, "PCMGAIN SETUP: PROBE_ENABLED\n");
+    }
     va_end(varg_list);
-    fprintf(stderr, "pcm_gain: frame_size=%d\n", frame_size);
 
-    return(xaf_comp_set_config(p_comp, 5, &param[0]));
+    fprintf(stderr, "PCMGAIN SETUP: Frame Size=%d\n", frame_size);
+
+    return(xaf_comp_set_config(p_comp, PCM_GAIN_NUM_SET_PARAMS + probe_enabled, &param[0]));
 }
+
 
 #if 0 /* unused function */
 static int get_comp_config(void *p_comp, xaf_format_t *comp_format)
@@ -451,7 +469,14 @@ int main_task(int argc, char **argv)
 
     mem_handle = mem_init();
 
-    TST_CHK_API(xaf_adev_open(&p_adev, audio_frmwk_buf_size, audio_comp_buf_size, mem_malloc, mem_free), "xaf_adev_open");
+    xaf_adev_config_t adev_config;
+    TST_CHK_API(xaf_adev_config_default_init(&adev_config), "xaf_adev_config_default_init");
+
+    adev_config.pmem_malloc =  mem_malloc;
+    adev_config.pmem_free =  mem_free;
+    adev_config.audio_framework_buffer_size =  audio_frmwk_buf_size;
+    adev_config.audio_component_buffer_size =  audio_comp_buf_size;
+    TST_CHK_API(xaf_adev_open(&p_adev, &adev_config),  "xaf_adev_open");
     FIO_PRINTF(stdout,"Audio Device Ready\n");
 
     for (i=0; i<NUM_COMP_IN_GRAPH; i++)
@@ -550,22 +575,22 @@ int main_task(int argc, char **argv)
     }//for(;i;)
 
     cid = XA_GAIN2;
-    TST_CHK_API(xaf_comp_create(p_adev, &p_comp[cid], comp_id[cid], comp_ninbuf[cid], comp_noutbuf[cid], &comp_inbuf[0], comp_type[cid]), "xaf_comp_create");
+    TST_CHK_API_COMP_CREATE(p_adev, &p_comp[cid], comp_id[cid], comp_ninbuf[cid], comp_noutbuf[cid], &comp_inbuf[0], comp_type[cid], "xaf_comp_create");
     FIO_PRINTF(stderr, "CREATE done for GAIN2 cid:%d\n", cid);
-    TST_CHK_API(comp_setup[cid](p_comp[cid], &comp_format[cid], 1, comp_framesize[cid]), "comp_setup");
+    TST_CHK_API(comp_setup[cid](p_comp[cid], &comp_format[cid], 3, comp_framesize[cid], comp_probe[cid], comp_probe_mask[cid]), "comp_setup");
     FIO_PRINTF(stderr, "SETUP done for GAIN2 cid:%d\n", cid);
 
     cid = XA_GAIN3;
-    TST_CHK_API(xaf_comp_create(p_adev, &p_comp[cid], comp_id[cid], comp_ninbuf[cid], comp_noutbuf[cid], &comp_inbuf[0], comp_type[cid]), "xaf_comp_create");
+    TST_CHK_API_COMP_CREATE(p_adev, &p_comp[cid], comp_id[cid], comp_ninbuf[cid], comp_noutbuf[cid], &comp_inbuf[0], comp_type[cid], "xaf_comp_create");
     FIO_PRINTF(stderr, "CREATE done for GAIN2 cid:%d\n", cid);
-    TST_CHK_API(comp_setup[cid](p_comp[cid], &comp_format[cid], 1, comp_framesize[cid]), "comp_setup");
+    TST_CHK_API(comp_setup[cid](p_comp[cid], &comp_format[cid], 3, comp_framesize[cid], comp_probe[cid], comp_probe_mask[cid]), "comp_setup");
     FIO_PRINTF(stderr, "SETUP done for GAIN2 cid:%d\n", cid);
 
     for(k=0; k<NUM_INP_THREADS;k++)
     {
     	cid = comp_thread_order[k];
-    	TST_CHK_API(xaf_comp_create(p_adev, &p_comp[cid], comp_id[cid], comp_ninbuf[cid], comp_noutbuf[cid], &source_comp_inbuf[k][0], comp_type[cid]), "xaf_comp_create");
-        TST_CHK_API(comp_setup[cid](p_comp[cid], &comp_format[cid], 1, comp_framesize[cid]), "comp_setup");
+    	TST_CHK_API_COMP_CREATE(p_adev, &p_comp[cid], comp_id[cid], comp_ninbuf[cid], comp_noutbuf[cid], &source_comp_inbuf[k][0], comp_type[cid], "xaf_comp_create");
+        TST_CHK_API(comp_setup[cid](p_comp[cid], &comp_format[cid], 3, comp_framesize[cid], comp_probe[cid], comp_probe_mask[cid]), "comp_setup");
 
         TST_CHK_API(xaf_comp_process(p_adev, p_comp[cid], NULL, 0, XAF_START_FLAG), "xaf_comp_process");
         
@@ -623,7 +648,7 @@ int main_task(int argc, char **argv)
     }//for(;k;)
 
     cid = XA_RENDERER0;
-    TST_CHK_API(xaf_comp_create(p_adev, &p_comp[cid], comp_id[cid], comp_ninbuf[cid], comp_noutbuf[cid], &comp_inbuf[0], comp_type[cid]), "xaf_comp_create");
+    TST_CHK_API_COMP_CREATE(p_adev, &p_comp[cid], comp_id[cid], comp_ninbuf[cid], comp_noutbuf[cid], &comp_inbuf[0], comp_type[cid], "xaf_comp_create");
     FIO_PRINTF(stderr, "CREATE done for RENDERER0 cid:%d\n", cid);
     TST_CHK_API(comp_setup[cid](p_comp[cid], &comp_format[cid], 1, comp_framesize[cid]), "comp_setup");
     FIO_PRINTF(stderr, "SETUP done for RENDERER0 cid:%d\n", cid);
@@ -636,7 +661,7 @@ int main_task(int argc, char **argv)
     FIO_PRINTF(stderr, "START done for RENDERER0\n");
 
     cid = XA_AEC23_0;
-    TST_CHK_API(xaf_comp_create(p_adev, &p_comp[cid], comp_id[cid], comp_ninbuf[cid], comp_noutbuf[cid], &comp_inbuf[0], comp_type[cid]), "xaf_comp_create");
+    TST_CHK_API_COMP_CREATE(p_adev, &p_comp[cid], comp_id[cid], comp_ninbuf[cid], comp_noutbuf[cid], &comp_inbuf[0], comp_type[cid], "xaf_comp_create");
     FIO_PRINTF(stderr, "CREATE done for AEC23_0 cid:%d\n", cid);
     TST_CHK_API(comp_setup[cid](p_comp[cid], &comp_format[cid], 3, comp_framesize[cid], comp_probe[cid], comp_probe_mask[cid]), "comp_setup non-input");
     FIO_PRINTF(stderr, "SETUP done for AEC23_0 cid:%d\n", cid);
@@ -707,7 +732,7 @@ int main_task(int argc, char **argv)
       comp_thread_args[cid][5] = (void *)comp_id[cid];
       comp_thread_args[cid][6] = (void *)&comp_thread_order[k];
       FIO_PRINTF(stderr, "For thread %d comp_type=%d...p_input=%p p_output=%p\n", k, comp_type[cid], comp_input[cid][0], comp_output[cid][0]);
-      __xf_thread_create(&comp_thread[cid], comp_process_entry, comp_thread_args[cid], "ref-path-sync Thread", comp_stack[cid], STACK_SIZE, 7);
+      __xf_thread_create(&comp_thread[cid], comp_process_entry, comp_thread_args[cid], "ref-path-sync Thread", comp_stack[cid], STACK_SIZE, XAF_APP_THREADS_PRIORITY);
       FIO_PRINTF(stderr, "Created thread %d comp_type=%d\n", k, comp_type[cid]);
     }
 
@@ -763,15 +788,15 @@ int main_task(int argc, char **argv)
 
     {
         /* collect memory stats before closing the device */
-        WORD32 meminfo[3];
+        WORD32 meminfo[5];
         if(xaf_get_mem_stats(p_adev, &meminfo[0]))
         {
             FIO_PRINTF(stdout,"Init is incomplete, reliable memory stats are unavailable.\n");
         }
         else
         {
-            FIO_PRINTF(stderr,"Local Memory used by DSP Components, in bytes            : %8d of %8d\n", meminfo[0], AUDIO_COMP_BUF_SIZE);
-            FIO_PRINTF(stderr,"Shared Memory used by Components and Framework, in bytes : %8d of %8d\n", meminfo[1], AUDIO_FRMWK_BUF_SIZE);
+            FIO_PRINTF(stderr,"Local Memory used by DSP Components, in bytes            : %8d of %8d\n", meminfo[0], adev_config.audio_component_buffer_size);
+            FIO_PRINTF(stderr,"Shared Memory used by Components and Framework, in bytes : %8d of %8d\n", meminfo[1], adev_config.audio_framework_buffer_size);
             FIO_PRINTF(stderr,"Local Memory used by Framework, in bytes                 : %8d\n", meminfo[2]);
         }
     }
@@ -807,6 +832,9 @@ int main_task(int argc, char **argv)
     }
 
     fio_quit();
+    
+    /* ...deinitialize tracing facility */
+    TRACE_DEINIT();
 
     return 0;
 }

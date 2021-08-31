@@ -1,10 +1,12 @@
 #
-# Copyright (c) 2015-2020 Cadence Design Systems, Inc.
+# Copyright (c) 2015-2021 Cadence Design Systems, Inc.
 # 
 # Permission is hereby granted, free of charge, to any person obtaining
 # a copy of this software and associated documentation files (the
-# "Software"), to use this Software with Cadence processor cores only and 
-# not with any other processors and platforms, subject to
+# "Software"), to deal in the Software without restriction, including
+# without limitation the rights to use, copy, modify, merge, publish,
+# distribute, sublicense, and/or sell copies of the Software, and to
+# permit persons to whom the Software is furnished to do so, subject to
 # the following conditions:
 # 
 # The above copyright notice and this permission notice shall be included
@@ -26,14 +28,18 @@ ROOTDIR = ..
 CODEC_NAME = af_hostless
 
 XA_RTOS ?= xos
+XF_TRACE ?= 0
+XA_DISABLE_DEPRECATED_API ?= 0
+XA_DISABLE_EVENT ?= 0
+TFLM_SUPPORT ?= 0
 
 ifneq (,$(findstring RF-2015.2, $(XTENSA_SYSTEM)))
 # RF.2 toolchain
   CFLAGS += -D__TOOLS_RF2__
 endif
 
-ifeq ($(TRACE), 1)
-  CFLAGS += -DXF_TRACE=1
+ifneq ($(XF_TRACE), 0)
+  CFLAGS += -DXF_TRACE=$(XF_TRACE)
 endif
 
 ifeq ($(XA_RTOS),xos)
@@ -44,12 +50,21 @@ endif
 ifeq ($(XA_RTOS),freertos)
   FREERTOS_BASE ?= $(ROOTDIR)/FreeRTOS
   INCLUDES += -I$(ROOTDIR)/include/sysdeps/freertos/include \
-			  -I$(FREERTOS_BASE)/lib/include \
-			  -I$(FREERTOS_BASE)/lib/include/private \
-			  -I$(FREERTOS_BASE)/lib/FreeRTOS/portable/XCC/Xtensa \
+			  -I$(FREERTOS_BASE)/include \
+			  -I$(FREERTOS_BASE)/portable/XCC/Xtensa \
 			  -I$(FREERTOS_BASE)/demos/cadence/sim/common/config_files
   CFLAGS += -DHAVE_FREERTOS
 endif
+
+ifeq ($(XA_DISABLE_DEPRECATED_API), 1)
+   CFLAGS += -DXA_DISABLE_DEPRECATED_API
+endif
+
+ifeq ($(XA_DISABLE_EVENT), 1)
+   CFLAGS += -DXA_DISABLE_EVENT
+endif
+
+CFLAGS += -DLOCAL_SCHED=1 -DLOCAL_MSGQ=1
 
 vpath %.c $(ROOTDIR)/algo/hifi-dpf/src
 vpath %.c $(ROOTDIR)/algo/host-apf/src

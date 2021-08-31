@@ -1,10 +1,12 @@
 #
-# Copyright (c) 2015-2020 Cadence Design Systems, Inc.
+# Copyright (c) 2015-2021 Cadence Design Systems, Inc.
 # 
 # Permission is hereby granted, free of charge, to any person obtaining
 # a copy of this software and associated documentation files (the
-# "Software"), to use this Software with Cadence processor cores only and 
-# not with any other processors and platforms, subject to
+# "Software"), to deal in the Software without restriction, including
+# without limitation the rights to use, copy, modify, merge, publish,
+# distribute, sublicense, and/or sell copies of the Software, and to
+# permit persons to whom the Software is furnished to do so, subject to
 # the following conditions:
 # 
 # The above copyright notice and this permission notice shall be included
@@ -43,7 +45,7 @@ ifeq ($(CPU), gcc)
 else
     AR = xt-ar $(XTCORE)
     OBJCOPY = xt-objcopy $(XTCORE)
-    CC = xt-xcc $(XTCORE)
+    CC = xt-clang $(XTCORE)
     ISS = xt-run $(XTCORE)
     CONFIGDIR := $(shell $(ISS) --show-config=config)
     include $(CONFIGDIR)/misc/hostenv.mk
@@ -80,6 +82,7 @@ endif
 CFLAGS += $(EXTRA_CFLAGS)
 
 ifeq ($(DEBUG),1)
+  CFLAGS += -DXF_DEBUG=1
   NOSTRIP = 1
   OPT_O2 = -O0 -g 
   OPT_OS = -O0 -g
@@ -133,11 +136,11 @@ $(OBJ_LIBISROBJS): $(OBJDIR)/%.o: %.c
 	
 $(OBJ_LIBOSOBJS): $(OBJDIR)/%.o: %.c
 	@echo "Compiling $<"
-	$(QUIET) $(CC) -o $@ $(OPT_OS) $(CFLAGS) $(INCLUDES) -c $<
+	$(QUIET) $(CC) -o $@ $(OPT_OS) $(CFLAGS) $(ISR_SAFE_CFLAGS) $(INCLUDES) -c $<
 	
 $(OBJS_HOSTOBJS): $(OBJDIR)/%.o: %.c
 	@echo "Compiling $<"
-	$(QUIET) $(CC) -o $@ $(OPT_O2) $(CFLAGS) $(INCLUDES) -c $<
+	$(QUIET) $(CC) -o $@ $(OPT_O2) $(CFLAGS) $(ISR_SAFE_CFLAGS) $(INCLUDES) -c $<
 
 $(LIB): %.a: $(OBJDIR)/%.o
 	@echo "Creating Library $@"

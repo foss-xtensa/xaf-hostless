@@ -1,15 +1,17 @@
-/*******************************************************************************
-* Copyright (c) 2015-2020 Cadence Design Systems, Inc.
-* 
+/*
+* Copyright (c) 2015-2021 Cadence Design Systems Inc.
+*
 * Permission is hereby granted, free of charge, to any person obtaining
 * a copy of this software and associated documentation files (the
-* "Software"), to use this Software with Cadence processor cores only and 
-* not with any other processors and platforms, subject to
+* "Software"), to deal in the Software without restriction, including
+* without limitation the rights to use, copy, modify, merge, publish,
+* distribute, sublicense, and/or sell copies of the Software, and to
+* permit persons to whom the Software is furnished to do so, subject to
 * the following conditions:
-* 
+*
 * The above copyright notice and this permission notice shall be included
 * in all copies or substantial portions of the Software.
-* 
+*
 * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
 * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
 * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
@@ -17,8 +19,7 @@
 * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
 * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-******************************************************************************/
+*/
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -26,7 +27,7 @@
 #include <stdarg.h>
 
 #include "audio/xa-pcm-gain-api.h"
-#include "audio/xa-pcm-mix-api.h"
+#include "audio/xa-mimo-mix-api.h"
 #include "xaf-utils-test.h"
 #include "xaf-fio-test.h"
 
@@ -45,7 +46,7 @@ enum{
   NUM_COMP_IN_GRAPH
 };
 
-char comp_string[NUM_COMP_IN_GRAPH * 15] = {"XA_GAIN:0, XA_GAIN1:1, PCM-MIXER:2"};
+char comp_string[NUM_COMP_IN_GRAPH * 15] = {"XA_GAIN:0, XA_GAIN1:1, MIMO-MIXER:2"};
 #define COMPONENT_STRING FIO_PRINTF(stdout, "Component_ID : %s\n\n", comp_string);
 
 #define TESTBENCH_USAGE FIO_PRINTF(stdout, "\nDefault Usage: %s -infile:<>.pcm -infile:<>.pcm -outfile:<>.pcm <Optional Parameters> \nOnly mono, 16 bits, 44.1 kHz input pcm files supported\n\n", argv[0]);
@@ -71,9 +72,12 @@ double strm_duration;
 
 #ifdef XAF_PROFILE
     extern long long tot_cycles, frmwk_cycles, fread_cycles, fwrite_cycles;
-    extern long long dsp_comps_cycles, pcm_mix_cycles, pcm_gain_cycles;
+    extern long long dsp_comps_cycles, mimo_mix_cycles, pcm_gain_cycles;
     extern double dsp_mcps;
 #endif
+
+#define NUM_CONNECT_BUFS        4
+int num_connect_bufs = NUM_CONNECT_BUFS;
 
 /* Dummy unused functions */
 XA_ERRORCODE xa_mp3_decoder(xa_codec_handle_t var1, WORD32 var2, WORD32 var3, pVOID var4){return 0;}
@@ -90,35 +94,40 @@ XA_ERRORCODE xa_vorbis_decoder(xa_codec_handle_t var1, WORD32 var2, WORD32 var3,
 XA_ERRORCODE xa_dummy_aec22(xa_codec_handle_t var1, WORD32 var2, WORD32 var3, pVOID var4){return 0;}
 XA_ERRORCODE xa_dummy_aec23(xa_codec_handle_t var1, WORD32 var2, WORD32 var3, pVOID var4){return 0;}
 XA_ERRORCODE xa_pcm_split(xa_codec_handle_t var1, WORD32 var2, WORD32 var3, pVOID var4){return 0;}
-///XA_ERRORCODE xa_pcm_mix(xa_codec_handle_t var1, WORD32 var2, WORD32 var3, pVOID var4){return 0;}
+///XA_ERRORCODE xa_mimo_mix(xa_codec_handle_t var1, WORD32 var2, WORD32 var3, pVOID var4){return 0;}
 XA_ERRORCODE xa_dummy_wwd(xa_codec_handle_t p_xa_module_obj, WORD32 i_cmd, WORD32 i_idx, pVOID pv_value) {return 0;}
 XA_ERRORCODE xa_dummy_hbuf(xa_codec_handle_t p_xa_module_obj, WORD32 i_cmd, WORD32 i_idx, pVOID pv_value) {return 0;}
 XA_ERRORCODE xa_opus_encoder(xa_codec_handle_t p_xa_module_obj, WORD32 i_cmd, WORD32 i_idx, pVOID pv_value) {return 0;}
 XA_ERRORCODE xa_dummy_wwd_msg(xa_codec_handle_t var1, WORD32 var2, WORD32 var3, pVOID var4){return 0;}
 XA_ERRORCODE xa_dummy_hbuf_msg(xa_codec_handle_t var1, WORD32 var2, WORD32 var3, pVOID var4){return 0;}
+XA_ERRORCODE xa_opus_decoder(xa_codec_handle_t p_xa_module_obj, WORD32 i_cmd, WORD32 i_idx, pVOID pv_value) {return 0;}
+XA_ERRORCODE xa_microspeech_fe(xa_codec_handle_t var1, WORD32 var2, WORD32 var3, pVOID var4){return 0;}
+XA_ERRORCODE xa_microspeech_inference(xa_codec_handle_t var1, WORD32 var2, WORD32 var3, pVOID var4){return 0;}
+XA_ERRORCODE xa_person_detect_inference(xa_codec_handle_t var1, WORD32 var2, WORD32 var3, pVOID var4){return 0;}
+XA_ERRORCODE xa_keyword_detection_inference(xa_codec_handle_t var1, WORD32 var2, WORD32 var3, pVOID var4){return 0;}
 
 #define MAX_INP_STRMS           2
 #define MAX_OUT_STRMS           2
 #define MIN_INP_STRMS           2
 
-#define PCM_MIX_SAMPLE_RATE         44100
-#define PCM_MIX_IN_NUM_CH           1
-#define PCM_MIX_PCM_WIDTH           16
+#define MIMO_MIX_SAMPLE_RATE         44100
+#define MIMO_MIX_IN_NUM_CH           1
+#define MIMO_MIX_PCM_WIDTH           16
 
-static int pcm_mix_setup(void *p_comp, xaf_format_t *p_format, int nvar_args, ...)
+static int mimo_mix_setup(void *p_comp, xaf_format_t *p_format, int nvar_args, ...)
 {
-#define PCM_MIX_NUM_SET_PARAMS	3
-    int param[(PCM_MIX_NUM_SET_PARAMS+1) * 2];
+#define MIMO_MIX_NUM_SET_PARAMS	3
+    int param[(MIMO_MIX_NUM_SET_PARAMS+1) * 2];
     int probe_enabled;
     va_list varg_list;
 
     va_start(varg_list, nvar_args);
 
-    param[0*2+0] = XA_PCM_MIX_CONFIG_PARAM_CHANNELS;
+    param[0*2+0] = XA_MIMO_MIX_CONFIG_PARAM_CHANNELS;
     param[0*2+1] = p_format->channels;          
-    param[1*2+0] = XA_PCM_MIX_CONFIG_PARAM_SAMPLE_RATE;
+    param[1*2+0] = XA_MIMO_MIX_CONFIG_PARAM_SAMPLE_RATE;
     param[1*2+1] = p_format->sample_rate;
-    param[2*2+0] = XA_PCM_MIX_CONFIG_PARAM_PCM_WIDTH;
+    param[2*2+0] = XA_MIMO_MIX_CONFIG_PARAM_PCM_WIDTH;
     param[2*2+1] = p_format->pcm_width;
 
     probe_enabled = va_arg(varg_list, int);
@@ -127,11 +136,11 @@ static int pcm_mix_setup(void *p_comp, xaf_format_t *p_format, int nvar_args, ..
       param[3*2+0] = XAF_COMP_CONFIG_PARAM_PROBE_ENABLE;
       param[3*2+1] = va_arg(varg_list, int);
     
-      fprintf(stderr, "PCM-MIXER SETUP: PROBE_ENABLED\n");
+      fprintf(stderr, "MIMO-MIXER SETUP: PROBE_ENABLED\n");
     }
     va_end(varg_list);
 
-    return(xaf_comp_set_config(p_comp, PCM_MIX_NUM_SET_PARAMS+probe_enabled, &param[0]));
+    return(xaf_comp_set_config(p_comp, MIMO_MIX_NUM_SET_PARAMS+probe_enabled, &param[0]));
 }
 
 #define PCM_GAIN_SAMPLE_WIDTH   16
@@ -187,9 +196,9 @@ static int get_comp_config(void *p_comp, xaf_format_t *comp_format)
     TST_CHK_PTR(p_comp, "get_comp_config");
     TST_CHK_PTR(comp_format, "get_comp_config");
 
-    param[0] = XA_PCM_MIX_CONFIG_PARAM_CHANNELS;
-    param[2] = XA_PCM_MIX_CONFIG_PARAM_PCM_WIDTH;
-    param[4] = XA_PCM_MIX_CONFIG_PARAM_SAMPLE_RATE;
+    param[0] = XA_MIMO_MIX_CONFIG_PARAM_CHANNELS;
+    param[2] = XA_MIMO_MIX_CONFIG_PARAM_PCM_WIDTH;
+    param[4] = XA_MIMO_MIX_CONFIG_PARAM_SAMPLE_RATE;
 
 
     ret = xaf_comp_get_config(p_comp, 3, &param[0]);
@@ -250,7 +259,7 @@ int main_task(int argc, char **argv)
     fread_cycles = 0;
     fwrite_cycles = 0;
     dsp_comps_cycles = 0;
-    pcm_mix_cycles = 0; pcm_gain_cycles = 0;
+    mimo_mix_cycles = 0; pcm_gain_cycles = 0;
     tot_cycles = 0;
     num_bytes_read = 0;
     num_bytes_write = 0;
@@ -271,10 +280,10 @@ int main_task(int argc, char **argv)
     TST_CHK_API(xaf_get_verinfo(ver_info), "xaf_get_verinfo");
 
     /* ...show xaf version info*/
-    TST_CHK_API(print_verinfo(ver_info,(pUWORD8)"\'pcm_mix\'"), "print_verinfo");
+    TST_CHK_API(print_verinfo(ver_info,(pUWORD8)"\'mimo_mix\'"), "print_verinfo");
 
     /* ...initialize tracing facility */
-    TRACE_INIT("Xtensa Audio Framework - /'pcm_mix/' Sample App");
+    TRACE_INIT("Xtensa Audio Framework - /'mimo_mix/' Sample App");
 
     /* ...check input arguments */
 #if 0
@@ -390,6 +399,21 @@ int main_task(int argc, char **argv)
                 comp_probe_mask[cid] |=  XAF_PORT_MASK( port_num );    
             }             
         }
+#ifdef XA_CONFIG_CONNECT_BUFS
+        /* ...only for internal testing */
+        else if (NULL != strstr(argv[i + 1], "-connect-bufs:"))
+        {
+            char *num_bufs = (char *)&(argv[i + 1][14]);
+
+            if ((*num_bufs) == '\0')
+            {
+                FIO_PRINTF(stderr, "Number of connect bufferes is not provided\n");
+                exit(-1);
+            }
+            num_connect_bufs = atoi(num_bufs);
+            printf("num_connect_bufs =%d\n", num_connect_bufs);
+        }
+#endif
         else
         {
             PRINT_USAGE;
@@ -428,12 +452,12 @@ int main_task(int argc, char **argv)
 	switch(cid)
 	{
 	  case XA_MIMO21_0:
-    	    comp_format[cid].sample_rate = PCM_MIX_SAMPLE_RATE;
-    	    comp_format[cid].channels    = PCM_MIX_IN_NUM_CH;
-    	    comp_format[cid].pcm_width   = PCM_MIX_PCM_WIDTH;
-    	    comp_setup[cid] = pcm_mix_setup;
+    	    comp_format[cid].sample_rate = MIMO_MIX_SAMPLE_RATE;
+    	    comp_format[cid].channels    = MIMO_MIX_IN_NUM_CH;
+    	    comp_format[cid].pcm_width   = MIMO_MIX_PCM_WIDTH;
+    	    comp_setup[cid] = mimo_mix_setup;
     	    comp_type[cid] = XAF_MIMO_PROC_21;
-            comp_id[cid]    = "mimo-proc21/pcm_mix";
+            comp_id[cid]    = "mimo-proc21/mimo_mix";
 	    comp_ninbuf[cid]  = 0;
 	    comp_noutbuf[cid] = 1;
 	  break;
@@ -462,13 +486,20 @@ int main_task(int argc, char **argv)
 	}//switch()
     }//for(;i;)
 
-    TST_CHK_API(xaf_adev_open(&p_adev, audio_frmwk_buf_size, audio_comp_buf_size, mem_malloc, mem_free), "xaf_adev_open");
+    xaf_adev_config_t adev_config;
+    TST_CHK_API(xaf_adev_config_default_init(&adev_config), "xaf_adev_config_default_init");
+
+    adev_config.pmem_malloc =  mem_malloc;
+    adev_config.pmem_free =  mem_free;
+    adev_config.audio_framework_buffer_size =  audio_frmwk_buf_size;
+    adev_config.audio_component_buffer_size =  audio_comp_buf_size;
+    TST_CHK_API(xaf_adev_open(&p_adev, &adev_config),  "xaf_adev_open");
     FIO_PRINTF(stdout,"Audio Device Ready\n");
 
     for(k=0; k<(XA_MIMO21_0);k++)
     {
 	cid = comp_create_order[k];
-    	TST_CHK_API(xaf_comp_create(p_adev, &p_comp[cid], comp_id[cid], comp_ninbuf[cid], comp_noutbuf[cid], &comp_inbuf[0], comp_type[cid]), "xaf_comp_create");
+    	TST_CHK_API_COMP_CREATE(p_adev, &p_comp[cid], comp_id[cid], comp_ninbuf[cid], comp_noutbuf[cid], &comp_inbuf[0], comp_type[cid], "xaf_comp_create");
         TST_CHK_API(comp_setup[cid](p_comp[cid], &comp_format[cid], 3, comp_framesize[cid], comp_probe[cid], comp_probe_mask[cid]), "comp_setup");
 
         TST_CHK_API(xaf_comp_process(p_adev, p_comp[cid], NULL, 0, XAF_START_FLAG), "xaf_comp_process");
@@ -522,14 +553,19 @@ int main_task(int argc, char **argv)
         TST_CHK_API(get_comp_config(p_comp[cid], &comp_format[cid]), "get_comp_config");
     }//for(;k;)
 
-    TST_CHK_API(xaf_comp_create(p_adev, &p_comp[XA_MIMO21_0], comp_id[XA_MIMO21_0], comp_ninbuf[XA_MIMO21_0], comp_noutbuf[XA_MIMO21_0], NULL, comp_type[XA_MIMO21_0]), "xaf_comp_create");
+    TST_CHK_API_COMP_CREATE(p_adev, &p_comp[XA_MIMO21_0], comp_id[XA_MIMO21_0], comp_ninbuf[XA_MIMO21_0], comp_noutbuf[XA_MIMO21_0], NULL, comp_type[XA_MIMO21_0], "xaf_comp_create");
     cid = XA_MIMO21_0;
     TST_CHK_API(comp_setup[cid](p_comp[cid], &comp_format[cid], 2, comp_probe[cid], comp_probe_mask[cid]), "comp_setup");
-    TST_CHK_API(xaf_connect(p_comp[XA_GAIN0], 1, p_comp[XA_MIMO21_0], 0, 4), "xaf_connect");
-    TST_CHK_API(xaf_connect(p_comp[XA_GAIN1], 1, p_comp[XA_MIMO21_0], 1, 4), "xaf_connect");
+    TST_CHK_API(xaf_connect(p_comp[XA_GAIN0], 1, p_comp[XA_MIMO21_0], 0, num_connect_bufs), "xaf_connect");
+    TST_CHK_API(xaf_connect(p_comp[XA_GAIN1], 1, p_comp[XA_MIMO21_0], 1, num_connect_bufs), "xaf_connect");
 
     TST_CHK_API(xaf_comp_process(p_adev, p_comp[XA_MIMO21_0], NULL, 0, XAF_START_FLAG), "xaf_comp_process");
     TST_CHK_API(xaf_comp_get_status(p_adev, p_comp[XA_MIMO21_0], &comp_status, &dec_info[0]), "xaf_comp_get_status");
+
+#ifndef XA_DISABLE_EVENT
+    TST_CHK_API(xaf_create_event_channel(p_comp[XA_MIMO21_0], XA_MIMO_MIX_CONFIG_PARAM_EVENT_GAIN_FACTOR, p_comp[XA_GAIN0], XA_PCM_GAIN_CONFIG_PARAM_EVENT_GAIN_FACTOR, 4, 4), "xaf_create_event_channel");
+    TST_CHK_API(xaf_create_event_channel(p_comp[XA_MIMO21_0], XA_MIMO_MIX_CONFIG_PARAM_EVENT_GAIN_FACTOR, p_comp[XA_GAIN1], XA_PCM_GAIN_CONFIG_PARAM_EVENT_GAIN_FACTOR, 4, 4), "xaf_create_event_channel");
+#endif
 
 #ifdef XAF_PROFILE
     clk_start();
@@ -545,7 +581,7 @@ int main_task(int argc, char **argv)
       comp_thread_args[cid][4] = &comp_type[cid];
       comp_thread_args[cid][5] = (void *)comp_id[cid];
       comp_thread_args[cid][6] = (void *)&comp_create_order[k];
-      __xf_thread_create(&comp_thread[cid], comp_process_entry, comp_thread_args[cid], "pcm_mix Thread", comp_stack[cid], STACK_SIZE, 7);
+      __xf_thread_create(&comp_thread[cid], comp_process_entry, comp_thread_args[cid], "mimo_mix Thread", comp_stack[cid], STACK_SIZE, XAF_APP_THREADS_PRIORITY);
     }
 
 #ifdef RUNTIME_ACTIONS
@@ -559,7 +595,7 @@ int main_task(int argc, char **argv)
     }
 
     {
-        int ret = execute_runtime_actions(runtime_params, &p_adev, &p_comp[0], comp_nbufs, &threads[0], NUM_COMP_IN_GRAPH, NULL, (int) NULL, NULL); 
+        int ret = execute_runtime_actions(runtime_params, p_adev, &p_comp[0], comp_nbufs, &threads[0], NUM_COMP_IN_GRAPH, NULL, (int) NULL, NULL); 
         if (ret) return ret;
     }
 #endif  //RUNTIME_ACTIONS
@@ -578,15 +614,15 @@ int main_task(int argc, char **argv)
 
     {
         /* collect memory stats before closing the device */
-        WORD32 meminfo[3];
+        WORD32 meminfo[5];
         if(xaf_get_mem_stats(p_adev, &meminfo[0]))
         {
             FIO_PRINTF(stdout,"Init is incomplete, reliable memory stats are unavailable.\n");
         }
         else
         {
-            FIO_PRINTF(stderr,"Local Memory used by DSP Components, in bytes            : %8d of %8d\n", meminfo[0], AUDIO_COMP_BUF_SIZE);
-            FIO_PRINTF(stderr,"Shared Memory used by Components and Framework, in bytes : %8d of %8d\n", meminfo[1], AUDIO_FRMWK_BUF_SIZE);
+            FIO_PRINTF(stderr,"Local Memory used by DSP Components, in bytes            : %8d of %8d\n", meminfo[0], adev_config.audio_component_buffer_size);
+            FIO_PRINTF(stderr,"Shared Memory used by Components and Framework, in bytes : %8d of %8d\n", meminfo[1], adev_config.audio_framework_buffer_size);
             FIO_PRINTF(stderr,"Local Memory used by Framework, in bytes                 : %8d\n", meminfo[2]);
         }
     }
@@ -597,6 +633,11 @@ int main_task(int argc, char **argv)
       __xf_thread_destroy(&comp_thread[cid]);
     }
 
+#ifndef XA_DISABLE_EVENT
+    TST_CHK_API(xaf_delete_event_channel(p_comp[XA_MIMO21_0], XA_MIMO_MIX_CONFIG_PARAM_EVENT_GAIN_FACTOR, p_comp[XA_GAIN0], XA_PCM_GAIN_CONFIG_PARAM_EVENT_GAIN_FACTOR), "xaf_delete_event_channel");
+    TST_CHK_API(xaf_delete_event_channel(p_comp[XA_MIMO21_0], XA_MIMO_MIX_CONFIG_PARAM_EVENT_GAIN_FACTOR, p_comp[XA_GAIN1], XA_PCM_GAIN_CONFIG_PARAM_EVENT_GAIN_FACTOR), "xaf_delete_event_channel");
+#endif
+
     for(k=0; k<(NUM_COMP_IN_GRAPH);k++)
       TST_CHK_API(xaf_comp_delete(p_comp[k]), "xaf_comp_delete");
 
@@ -605,7 +646,7 @@ int main_task(int argc, char **argv)
 
     mem_exit();
 
-    dsp_comps_cycles = pcm_mix_cycles + pcm_gain_cycles;
+    dsp_comps_cycles = mimo_mix_cycles + pcm_gain_cycles;
 
     dsp_mcps = compute_comp_mcps(num_bytes_write, dsp_comps_cycles, comp_format[XA_MIMO21_0], &strm_duration);
 
@@ -622,6 +663,9 @@ int main_task(int argc, char **argv)
     }
 
     fio_quit();
+    
+    /* ...deinitialize tracing facility */
+    TRACE_DEINIT();
 
     return 0;
 }

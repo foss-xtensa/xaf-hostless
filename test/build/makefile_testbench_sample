@@ -1,10 +1,12 @@
 #
-# Copyright (c) 2015-2020 Cadence Design Systems, Inc.
+# Copyright (c) 2015-2021 Cadence Design Systems, Inc.
 # 
 # Permission is hereby granted, free of charge, to any person obtaining
 # a copy of this software and associated documentation files (the
-# "Software"), to use this Software with Cadence processor cores only and 
-# not with any other processors and platforms, subject to
+# "Software"), to deal in the Software without restriction, including
+# without limitation the rights to use, copy, modify, merge, publish,
+# distribute, sublicense, and/or sell copies of the Software, and to
+# permit persons to whom the Software is furnished to do so, subject to
 # the following conditions:
 # 
 # The above copyright notice and this permission notice shall be included
@@ -22,10 +24,10 @@
 .PHONY: 
 
 af_hostless_test:
-	$(MAKE) -f makefile_testbench XA_MP3_DECODER=0 XA_MP3_ENCODER=0 XA_MIXER=0 XA_AMR_WB_DEC=0 XA_SRC_PP_FX=0 XA_AAC_DECODER=0 XA_RENDERER=0 XA_CAPTURER=0 ROOTDIR=../.. all
+	$(MAKE) -f makefile_testbench XA_MP3_DECODER=0 XA_MP3_ENCODER=0 XA_MIXER=0 XA_AMR_WB_DEC=0 XA_SRC_PP_FX=0 XA_AAC_DECODER=0 XA_RENDERER=0 XA_CAPTURER=0 XA_VORBIS_DECODER=0 XA_AEC22=0 XA_AEC23=0 XA_PCM_SPLIT=0 XA_MIMO_MIX=0 XA_TFLM_MICROSPEECH=0 XA_TFLM_PERSON_DETECT=0 ROOTDIR=../.. all
 
 all:
-	$(MAKE) -f makefile_testbench XA_MP3_DECODER=0 XA_MP3_ENCODER=0 XA_MIXER=0 XA_AMR_WB_DEC=0 XA_SRC_PP_FX=0 XA_AAC_DECODER=0 XA_RENDERER=0 XA_CAPTURER=0 ROOTDIR=../.. all
+	$(MAKE) -f makefile_testbench XA_MP3_DECODER=0 XA_MP3_ENCODER=0 XA_MIXER=0 XA_AMR_WB_DEC=0 XA_SRC_PP_FX=0 XA_AAC_DECODER=0 XA_RENDERER=0 XA_CAPTURER=0 XA_VORBIS_DECODER=0 XA_AEC22=0 XA_AEC23=0 XA_PCM_SPLIT=0 XA_MIMO_MIX=0 XA_TFLM_MICROSPEECH=0 XA_TFLM_PERSON_DETECT=0 ROOTDIR=../.. all
 
 all-dec:
 	$(MAKE) -f makefile_testbench ROOTDIR=../.. all-dec

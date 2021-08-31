@@ -1,15 +1,17 @@
-/*******************************************************************************
-* Copyright (c) 2015-2020 Cadence Design Systems, Inc.
-* 
+/*
+* Copyright (c) 2015-2021 Cadence Design Systems Inc.
+*
 * Permission is hereby granted, free of charge, to any person obtaining
 * a copy of this software and associated documentation files (the
-* "Software"), to use this Software with Cadence processor cores only and 
-* not with any other processors and platforms, subject to
+* "Software"), to deal in the Software without restriction, including
+* without limitation the rights to use, copy, modify, merge, publish,
+* distribute, sublicense, and/or sell copies of the Software, and to
+* permit persons to whom the Software is furnished to do so, subject to
 * the following conditions:
-* 
+*
 * The above copyright notice and this permission notice shall be included
 * in all copies or substantial portions of the Software.
-* 
+*
 * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
 * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
 * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
@@ -17,8 +19,7 @@
 * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
 * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-******************************************************************************/
+*/
 /*******************************************************************************
  * xa-factory.c
  *
@@ -42,13 +43,6 @@
 #include "xf-debug.h"
 #include "xaf-api.h"
 #include "xa_type_def.h"
-
-/*******************************************************************************
- * Tracing tags
- ******************************************************************************/
-
-/* ...general initialization sequence */
-TRACE_TAG(INIT, 1);
 
 /*******************************************************************************
  * Local types definitions
@@ -87,8 +81,12 @@ extern XA_ERRORCODE xa_vorbis_decoder(xa_codec_handle_t, WORD32, WORD32, pVOID);
 extern XA_ERRORCODE xa_dummy_aec22(xa_codec_handle_t, WORD32, WORD32, pVOID);
 extern XA_ERRORCODE xa_dummy_aec23(xa_codec_handle_t, WORD32, WORD32, pVOID);
 extern XA_ERRORCODE xa_pcm_split(xa_codec_handle_t, WORD32, WORD32, pVOID);
-extern XA_ERRORCODE xa_pcm_mix(xa_codec_handle_t, WORD32, WORD32, pVOID);
+extern XA_ERRORCODE xa_mimo_mix(xa_codec_handle_t, WORD32, WORD32, pVOID);
 extern XA_ERRORCODE xa_opus_encoder(xa_codec_handle_t, WORD32, WORD32, pVOID);
+extern XA_ERRORCODE xa_microspeech_fe(xa_codec_handle_t, WORD32, WORD32, pVOID);
+extern XA_ERRORCODE xa_microspeech_inference(xa_codec_handle_t, WORD32, WORD32, pVOID);
+extern XA_ERRORCODE xa_person_detect_inference(xa_codec_handle_t, WORD32, WORD32, pVOID);
+extern XA_ERRORCODE xa_opus_decoder(xa_codec_handle_t, WORD32, WORD32, pVOID);
 
 /* ...component class factories */
 extern void * xa_audio_codec_factory(UWORD32 core, xa_codec_func_t process, xaf_comp_type comp_type);
@@ -106,15 +104,15 @@ const char *comp_id[] = {"audio-decoder",
                          "mixer",
                          "pre-proc",
                          "post-proc",
-						 "renderer",
-						 "capturer",
-            			 "mimo-proc12",
-            			 "mimo-proc21",
-            			 "mimo-proc22",
-            			 "mimo-proc23",
-            			 "mimo-proc10",
+                         "renderer",
+                         "capturer",
+                         "mimo-proc12",
+                         "mimo-proc21",
+                         "mimo-proc22",
+                         "mimo-proc23",
+                         "mimo-proc10",
                          "mimo-proc11",
-			};
+            };
 
 /* ...component class id */
 static const xf_component_id_t xf_component_id[] =
@@ -147,7 +145,7 @@ static const xf_component_id_t xf_component_id[] =
     { "capturer",              xa_capturer_factory,        xa_capturer },
 #endif
 #if XA_SRC_PP_FX
-    { "audio-fx/src-pp",        xa_audio_codec_factory,     xa_src_pp_fx },
+    { "post-proc/src-pp",        xa_audio_codec_factory,     xa_src_pp_fx },
 #endif
 #if XA_VORBIS_DECODER
     { "audio-decoder/vorbis",       xa_audio_codec_factory,     xa_vorbis_decoder },
@@ -161,11 +159,21 @@ static const xf_component_id_t xf_component_id[] =
 #if XA_PCM_SPLIT
     { "mimo-proc12/pcm_split",  xa_mimo_proc_factory,       xa_pcm_split },
 #endif
-#if XA_PCM_MIX
-    { "mimo-proc21/pcm_mix",    xa_mimo_proc_factory,       xa_pcm_mix },
+#if XA_MIMO_MIX
+    { "mimo-proc21/mimo_mix",    xa_mimo_proc_factory,       xa_mimo_mix },
 #endif
 #if XA_OPUS_ENCODER
     { "audio-encoder/opus",       xa_audio_codec_factory,     xa_opus_encoder},
+#endif
+#if XA_TFLM_MICROSPEECH
+    { "post-proc/microspeech_fe",      xa_audio_codec_factory,    xa_microspeech_fe },
+    { "post-proc/microspeech_inference",      xa_audio_codec_factory,    xa_microspeech_inference },
+#endif
+#if XA_TFLM_PERSON_DETECT
+    { "post-proc/person_detect_inference",      xa_audio_codec_factory,    xa_person_detect_inference },
+#endif
+#if XA_OPUS_DECODER
+    { "audio-decoder/opus",       xa_audio_codec_factory,     xa_opus_decoder},
 #endif
 };
 

@@ -1,15 +1,17 @@
-/*******************************************************************************
-* Copyright (c) 2015-2020 Cadence Design Systems, Inc.
-* 
+/*
+* Copyright (c) 2015-2021 Cadence Design Systems Inc.
+*
 * Permission is hereby granted, free of charge, to any person obtaining
 * a copy of this software and associated documentation files (the
-* "Software"), to use this Software with Cadence processor cores only and 
-* not with any other processors and platforms, subject to
+* "Software"), to deal in the Software without restriction, including
+* without limitation the rights to use, copy, modify, merge, publish,
+* distribute, sublicense, and/or sell copies of the Software, and to
+* permit persons to whom the Software is furnished to do so, subject to
 * the following conditions:
-* 
+*
 * The above copyright notice and this permission notice shall be included
 * in all copies or substantial portions of the Software.
-* 
+*
 * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
 * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
 * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
@@ -17,8 +19,7 @@
 * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
 * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-******************************************************************************/
+*/
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -28,7 +29,7 @@
 #include "xaf-utils-test.h"
 #include "xaf-fio-test.h"
 
-#define PRINT_USAGE FIO_PRINTF(stdout, "\nUsage: %s -infile:in_filename.pcm -outfile:out_filename.pcm\n\n", argv[0]);
+#define PRINT_USAGE FIO_PRINTF(stdout, "\nUsage: %s -infile:in_filename.pcm -outfile:out_filename.pcm [optional -pcm_width:16 (default) or 8 or 24 or 32 ]\n For pcm_width:24, input and output samples are in the form of MSB aligned 32 bits\n\n", argv[0]);
 
 #define AUDIO_FRMWK_BUF_SIZE   (256 << 8)
 #define AUDIO_COMP_BUF_SIZE    (1024 << 7)
@@ -36,20 +37,25 @@
 
 //component parameters
 #define PCM_GAIN_SAMPLE_WIDTH   16
-// supports only 16-bit PCM
+// supports 8,16,24,32-bit PCM
 
 #define PCM_GAIN_NUM_CH         1
-// supports 1 and 2 channels only
+// supports upto 16 channels
 
 #define PCM_GAIN_IDX_FOR_GAIN   1
 //gain index range is 0 to 6 -> {0db, -6db, -12db, -18db, 6db, 12db, 18db}
 
 #define PCM_GAIN_SAMPLE_RATE    44100
 
+//following parameter is provided to simulate desired MHz load in PCM-GAIN for experiments
+#define PCM_GAIN_BURN_CYCLES    0
+
 unsigned int num_bytes_read, num_bytes_write;
 extern int audio_frmwk_buf_size;
 extern int audio_comp_buf_size;
 double strm_duration;
+
+int g_pcm_width=0;
 
 #ifdef XAF_PROFILE
     extern long long tot_cycles, frmwk_cycles, fread_cycles, fwrite_cycles;
@@ -71,22 +77,32 @@ XA_ERRORCODE xa_vorbis_decoder(xa_codec_handle_t var1, WORD32 var2, WORD32 var3,
 XA_ERRORCODE xa_dummy_aec22(xa_codec_handle_t p_xa_module_obj, WORD32 i_cmd, WORD32 i_idx, pVOID pv_value) {return 0;}
 XA_ERRORCODE xa_dummy_aec23(xa_codec_handle_t p_xa_module_obj, WORD32 i_cmd, WORD32 i_idx, pVOID pv_value) {return 0;}
 XA_ERRORCODE xa_pcm_split(xa_codec_handle_t p_xa_module_obj, WORD32 i_cmd, WORD32 i_idx, pVOID pv_value) {return 0;}
-XA_ERRORCODE xa_pcm_mix(xa_codec_handle_t p_xa_module_obj, WORD32 i_cmd, WORD32 i_idx, pVOID pv_value) {return 0;}
+XA_ERRORCODE xa_mimo_mix(xa_codec_handle_t p_xa_module_obj, WORD32 i_cmd, WORD32 i_idx, pVOID pv_value) {return 0;}
 XA_ERRORCODE xa_dummy_wwd(xa_codec_handle_t var1, WORD32 var2, WORD32 var3, pVOID var4){return 0;}
 XA_ERRORCODE xa_dummy_hbuf(xa_codec_handle_t var1, WORD32 var2, WORD32 var3, pVOID var4){return 0;}
 XA_ERRORCODE xa_opus_encoder(xa_codec_handle_t var1, WORD32 var2, WORD32 var3, pVOID var4){return 0;}
 XA_ERRORCODE xa_dummy_wwd_msg(xa_codec_handle_t var1, WORD32 var2, WORD32 var3, pVOID var4){return 0;}
 XA_ERRORCODE xa_dummy_hbuf_msg(xa_codec_handle_t var1, WORD32 var2, WORD32 var3, pVOID var4){return 0;}
+XA_ERRORCODE xa_opus_decoder(xa_codec_handle_t p_xa_module_obj, WORD32 i_cmd, WORD32 i_idx, pVOID pv_value) {return 0;}
+XA_ERRORCODE xa_microspeech_fe(xa_codec_handle_t var1, WORD32 var2, WORD32 var3, pVOID var4){return 0;}
+XA_ERRORCODE xa_microspeech_inference(xa_codec_handle_t var1, WORD32 var2, WORD32 var3, pVOID var4){return 0;}
+XA_ERRORCODE xa_person_detect_inference(xa_codec_handle_t var1, WORD32 var2, WORD32 var3, pVOID var4){return 0;}
+XA_ERRORCODE xa_keyword_detection_inference(xa_codec_handle_t var1, WORD32 var2, WORD32 var3, pVOID var4){return 0;}
 
 static int pcm_gain_setup(void *p_comp)
 {
-    int param[10];
-    int pcm_width = PCM_GAIN_SAMPLE_WIDTH;        // supports only 16-bit PCM
-    int num_ch = PCM_GAIN_NUM_CH;                 // supports 1 and 2 channels only
+    int param[12];
+    int pcm_width;
+    int num_ch = PCM_GAIN_NUM_CH;                 // supports upto 16 channels
     int sample_rate = PCM_GAIN_SAMPLE_RATE;
     int gain_idx = PCM_GAIN_IDX_FOR_GAIN;         //gain index range is 0 to 6 -> {0db, -6db, -12db, -18db, 6db, 12db, 18db}
     int frame_size = XAF_INBUF_SIZE;
 
+    if(g_pcm_width == 0)
+        pcm_width = PCM_GAIN_SAMPLE_WIDTH;        // supports 8,16,24,32-bit PCM
+    else
+        pcm_width = g_pcm_width;
+    
     param[0] = XA_PCM_GAIN_CONFIG_PARAM_CHANNELS;
     param[1] = num_ch;
     param[2] = XA_PCM_GAIN_CONFIG_PARAM_SAMPLE_RATE;
@@ -97,8 +113,10 @@ static int pcm_gain_setup(void *p_comp)
     param[7] = frame_size;
     param[8] = XA_PCM_GAIN_CONFIG_PARAM_GAIN_FACTOR;
     param[9] = gain_idx;
+    param[10]= XA_PCM_GAIN_BURN_ADDITIONAL_CYCLES;
+    param[11]= PCM_GAIN_BURN_CYCLES; 
 
-    return(xaf_comp_set_config(p_comp, 5, &param[0]));
+    return(xaf_comp_set_config(p_comp, 6, &param[0]));
 }
 
 static int get_comp_config(void *p_comp, xaf_format_t *comp_format)
@@ -192,7 +210,7 @@ int main_task(int argc, char **argv)
     TRACE_INIT("Xtensa Audio Framework - \'PCM Gain\' Sample App");
 
     /* ...check input arguments */
-    if (argc != 3)
+    if (argc < 3 || argc > 4)
     {
         PRINT_USAGE;
         return 0;
@@ -250,19 +268,44 @@ int main_task(int argc, char **argv)
         PRINT_USAGE;
         return 0;
     }
-
+    if(argc == 4)
+    {
+        if(NULL != strstr(argv[3], "-pcm_width:" ))
+        {
+            char *pcm_width_ptr = (char *)&(argv[3][11]);
+        
+            if((*pcm_width_ptr) == '\0')
+            {
+                FIO_PRINTF(stderr, "Pcm width is not provide\n");
+                exit(-1);
+            }
+            g_pcm_width = atoi(pcm_width_ptr);
+        }
+        else
+        {
+            PRINT_USAGE;
+            return 0;
+        }
+    }
     p_input  = fp;
     p_output = ofp;
 
     mem_handle = mem_init();
 
-    TST_CHK_API(xaf_adev_open(&p_adev, audio_frmwk_buf_size, audio_comp_buf_size, mem_malloc, mem_free), "xaf_adev_open");
+    xaf_adev_config_t adev_config;
+    TST_CHK_API(xaf_adev_config_default_init(&adev_config), "xaf_adev_config_default_init");
+
+    adev_config.pmem_malloc =  mem_malloc;
+    adev_config.pmem_free =  mem_free;
+    adev_config.audio_framework_buffer_size =  audio_frmwk_buf_size;
+    adev_config.audio_component_buffer_size =  audio_comp_buf_size;
+    TST_CHK_API(xaf_adev_open(&p_adev, &adev_config),  "xaf_adev_open");
 
     FIO_PRINTF(stdout,"Audio Device Ready\n");
 
     /* ...create pcm gain component */
     comp_type = XAF_POST_PROC;
-    TST_CHK_API(xaf_comp_create(p_adev, &p_pcm_gain, comp_id, 2, 1, &pcm_gain_inbuf[0], comp_type),"xaf_comp_create");
+    TST_CHK_API_COMP_CREATE(p_adev, &p_pcm_gain, comp_id, 2, 1, &pcm_gain_inbuf[0], comp_type, "xaf_comp_create");
     TST_CHK_API(comp_setup(p_pcm_gain), "comp_setup");
 
     /* ...start pcm gain component */
@@ -328,7 +371,7 @@ int main_task(int argc, char **argv)
     pcm_gain_thread_args[6] = (void *)&i;   //dummy
 
     /* ...init done, begin execution thread */
-    __xf_thread_create(&pcm_gain_thread, comp_process_entry, &pcm_gain_thread_args[0], "Pcm Gain Thread", pcm_gain_stack, STACK_SIZE, 7);
+    __xf_thread_create(&pcm_gain_thread, comp_process_entry, &pcm_gain_thread_args[0], "Pcm Gain Thread", pcm_gain_stack, STACK_SIZE, XAF_APP_THREADS_PRIORITY);
 
     __xf_thread_join(&pcm_gain_thread, NULL);
 
@@ -340,15 +383,15 @@ int main_task(int argc, char **argv)
 
     {
         /* collect memory stats before closing the device */
-        WORD32 meminfo[3];
+        WORD32 meminfo[5];
         if(xaf_get_mem_stats(p_adev, &meminfo[0]))
         {
             FIO_PRINTF(stdout,"Init is incomplete, reliable memory stats are unavailable.\n");
         }
         else
         {
-            FIO_PRINTF(stderr,"Local Memory used by DSP Components, in bytes            : %8d of %8d\n", meminfo[0], AUDIO_COMP_BUF_SIZE);
-            FIO_PRINTF(stderr,"Shared Memory used by Components and Framework, in bytes : %8d of %8d\n", meminfo[1], AUDIO_FRMWK_BUF_SIZE);
+            FIO_PRINTF(stderr,"Local Memory used by DSP Components, in bytes            : %8d of %8d\n", meminfo[0], adev_config.audio_component_buffer_size);
+            FIO_PRINTF(stderr,"Shared Memory used by Components and Framework, in bytes : %8d of %8d\n", meminfo[1], adev_config.audio_framework_buffer_size);
             FIO_PRINTF(stderr,"Local Memory used by Framework, in bytes                 : %8d\n", meminfo[2]);
         }
     }
@@ -362,6 +405,10 @@ int main_task(int argc, char **argv)
 
     dsp_comps_cycles = pcm_gain_cycles;
 
+    /* ...For pcm_width=24, pcm samples are in the format MSB aligned 32 bits. Therefore MCPS has to be calculated considering pcm_width=32.*/
+    if(pcm_gain_format.pcm_width == 24)
+        pcm_gain_format.pcm_width = 32;
+
     dsp_mcps = compute_comp_mcps(num_bytes_write, pcm_gain_cycles, pcm_gain_format, &strm_duration);
 
     TST_CHK_API(print_mem_mcps_info(mem_handle, num_comp), "print_mem_mcps_info");
@@ -370,6 +417,9 @@ int main_task(int argc, char **argv)
     if (ofp) fio_fclose(ofp);
 
     fio_quit();
+    
+    /* ...deinitialize tracing facility */
+    TRACE_DEINIT();
 
     return 0;
 }

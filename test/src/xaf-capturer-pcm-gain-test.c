@@ -1,15 +1,17 @@
-/*******************************************************************************
-* Copyright (c) 2015-2020 Cadence Design Systems, Inc.
-* 
+/*
+* Copyright (c) 2015-2021 Cadence Design Systems Inc.
+*
 * Permission is hereby granted, free of charge, to any person obtaining
 * a copy of this software and associated documentation files (the
-* "Software"), to use this Software with Cadence processor cores only and 
-* not with any other processors and platforms, subject to
+* "Software"), to deal in the Software without restriction, including
+* without limitation the rights to use, copy, modify, merge, publish,
+* distribute, sublicense, and/or sell copies of the Software, and to
+* permit persons to whom the Software is furnished to do so, subject to
 * the following conditions:
-* 
+*
 * The above copyright notice and this permission notice shall be included
 * in all copies or substantial portions of the Software.
-* 
+*
 * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
 * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
 * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
@@ -17,8 +19,7 @@
 * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
 * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-******************************************************************************/
+*/
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -33,7 +34,7 @@
     FIO_PRINTF(stdout, "\nNote: Capturer-plugin expects input file named 'capturer_in.pcm' to be present in the execution directory.\n\n");
 
 #define AUDIO_FRMWK_BUF_SIZE   (256 << 8)
-#define AUDIO_COMP_BUF_SIZE    (1024 << 7)
+#define AUDIO_COMP_BUF_SIZE    (1024 << 8)
 
 #define NUM_COMP_IN_GRAPH       2
 
@@ -76,12 +77,17 @@ XA_ERRORCODE xa_vorbis_decoder(xa_codec_handle_t var1, WORD32 var2, WORD32 var3,
 XA_ERRORCODE xa_dummy_aec22(xa_codec_handle_t p_xa_module_obj, WORD32 i_cmd, WORD32 i_idx, pVOID pv_value) {return 0;}
 XA_ERRORCODE xa_dummy_aec23(xa_codec_handle_t p_xa_module_obj, WORD32 i_cmd, WORD32 i_idx, pVOID pv_value) {return 0;}
 XA_ERRORCODE xa_pcm_split(xa_codec_handle_t p_xa_module_obj, WORD32 i_cmd, WORD32 i_idx, pVOID pv_value) {return 0;}
-XA_ERRORCODE xa_pcm_mix(xa_codec_handle_t p_xa_module_obj, WORD32 i_cmd, WORD32 i_idx, pVOID pv_value) {return 0;}
+XA_ERRORCODE xa_mimo_mix(xa_codec_handle_t p_xa_module_obj, WORD32 i_cmd, WORD32 i_idx, pVOID pv_value) {return 0;}
 XA_ERRORCODE xa_dummy_wwd(xa_codec_handle_t var1, WORD32 var2, WORD32 var3, pVOID var4){return 0;}
 XA_ERRORCODE xa_dummy_hbuf(xa_codec_handle_t var1, WORD32 var2, WORD32 var3, pVOID var4){return 0;}
 XA_ERRORCODE xa_opus_encoder(xa_codec_handle_t var1, WORD32 var2, WORD32 var3, pVOID var4){return 0;}
 XA_ERRORCODE xa_dummy_wwd_msg(xa_codec_handle_t var1, WORD32 var2, WORD32 var3, pVOID var4){return 0;}
 XA_ERRORCODE xa_dummy_hbuf_msg(xa_codec_handle_t var1, WORD32 var2, WORD32 var3, pVOID var4){return 0;}
+XA_ERRORCODE xa_opus_decoder(xa_codec_handle_t p_xa_module_obj, WORD32 i_cmd, WORD32 i_idx, pVOID pv_value) {return 0;}
+XA_ERRORCODE xa_microspeech_fe(xa_codec_handle_t var1, WORD32 var2, WORD32 var3, pVOID var4){return 0;}
+XA_ERRORCODE xa_microspeech_inference(xa_codec_handle_t var1, WORD32 var2, WORD32 var3, pVOID var4){return 0;}
+XA_ERRORCODE xa_person_detect_inference(xa_codec_handle_t var1, WORD32 var2, WORD32 var3, pVOID var4){return 0;}
+XA_ERRORCODE xa_keyword_detection_inference(xa_codec_handle_t var1, WORD32 var2, WORD32 var3, pVOID var4){return 0;}
 
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof(*(a)))
 
@@ -339,7 +345,14 @@ int main_task(int argc, char **argv)
 
     p_output = ofp;
     mem_handle = mem_init();
-    TST_CHK_API(xaf_adev_open(&p_adev, audio_frmwk_buf_size, audio_comp_buf_size, mem_malloc, mem_free), "xaf_adev_open");
+    xaf_adev_config_t adev_config;
+    TST_CHK_API(xaf_adev_config_default_init(&adev_config), "xaf_adev_config_default_init");
+
+    adev_config.pmem_malloc =  mem_malloc;
+    adev_config.pmem_free =  mem_free;
+    adev_config.audio_framework_buffer_size =  audio_frmwk_buf_size;
+    adev_config.audio_component_buffer_size =  audio_comp_buf_size;
+    TST_CHK_API(xaf_adev_open(&p_adev, &adev_config),  "xaf_adev_open");
     FIO_PRINTF(stdout,"Audio Device Ready\n");
 
     TST_CHK_API(xaf_adev_set_priorities(p_adev, 2, 3, 2), "xaf_adev_set_priorities");
@@ -349,7 +362,7 @@ int main_task(int argc, char **argv)
     capturer_format.sample_rate = CAPTURER_SAMPLE_RATE;
     capturer_format.channels = CAPTURER_NUM_CH;
     capturer_format.pcm_width = CAPTURER_PCM_WIDTH;
-    TST_CHK_API(xaf_comp_create(p_adev, &p_capturer, "capturer", 0, 0, NULL, comp_type),"xaf_comp_create");
+    TST_CHK_API_COMP_CREATE(p_adev, &p_capturer, "capturer", 0, 0, NULL, comp_type, "xaf_comp_create");
     TST_CHK_API(capturer_setup(p_capturer, capturer_format,sammple_end_capturer), "capturer_setup");
 
     pcm_gain_format.sample_rate = PCM_GAIN_SAMPLE_RATE;
@@ -357,7 +370,7 @@ int main_task(int argc, char **argv)
     pcm_gain_format.pcm_width = PCM_GAIN_SAMPLE_WIDTH;
 
      /* ...create pcm gain component */
-    TST_CHK_API(xaf_comp_create(p_adev, &p_pcm_gain, "post-proc/pcm_gain", 0, 1, NULL, XAF_POST_PROC), "xaf_comp_create");
+    TST_CHK_API_COMP_CREATE(p_adev, &p_pcm_gain, "post-proc/pcm_gain", 0, 1, NULL, XAF_POST_PROC, "xaf_comp_create");
     TST_CHK_API(pcm_gain_setup(p_pcm_gain,pcm_gain_format), "pcm_gain_setup");
 
     /* ...start capturer component */
@@ -395,7 +408,7 @@ int main_task(int argc, char **argv)
     pcm_gain_thread_args[4] = &comp_type;
     pcm_gain_thread_args[5] = (void *)comp_id;
     pcm_gain_thread_args[6] = (void *)&i;
-    ret = __xf_thread_create(&pcm_gain_thread, comp_process_entry, &pcm_gain_thread_args[0], "Pcm gain Thread", pcm_gain_stack, STACK_SIZE, 7);
+    ret = __xf_thread_create(&pcm_gain_thread, comp_process_entry, &pcm_gain_thread_args[0], "Pcm gain Thread", pcm_gain_stack, STACK_SIZE, XAF_APP_THREADS_PRIORITY);
     if(ret != XOS_OK)
     {
         FIO_PRINTF(stdout,"Failed to create PCM gain thread  : %d\n", ret);
@@ -409,6 +422,8 @@ int main_task(int argc, char **argv)
         exit(-1);
     }
 
+    __xf_thread_destroy(&pcm_gain_thread);
+
 #ifdef XAF_PROFILE
     compute_total_frmwrk_cycles();
     clk_stop();
@@ -419,15 +434,15 @@ int main_task(int argc, char **argv)
 
     {
         /* collect memory stats before closing the device */
-        WORD32 meminfo[3];
+        WORD32 meminfo[5];
         if(xaf_get_mem_stats(p_adev, &meminfo[0]))
         {
             FIO_PRINTF(stdout,"Init is incomplete, reliable memory stats are unavailable.\n");
         }
         else
         {
-            FIO_PRINTF(stderr,"Local Memory used by DSP Components, in bytes            : %8d of %8d\n", meminfo[0], AUDIO_COMP_BUF_SIZE);
-            FIO_PRINTF(stderr,"Shared Memory used by Components and Framework, in bytes : %8d of %8d\n", meminfo[1], AUDIO_FRMWK_BUF_SIZE);
+            FIO_PRINTF(stderr,"Local Memory used by DSP Components, in bytes            : %8d of %8d\n", meminfo[0], adev_config.audio_component_buffer_size);
+            FIO_PRINTF(stderr,"Shared Memory used by Components and Framework, in bytes : %8d of %8d\n", meminfo[1], adev_config.audio_framework_buffer_size);
             FIO_PRINTF(stderr,"Local Memory used by Framework, in bytes                 : %8d\n", meminfo[2]);
         }
     }
@@ -451,6 +466,9 @@ int main_task(int argc, char **argv)
     if (ofp) fio_fclose(ofp);
 
     fio_quit();
+
+    /* ...deinitialize tracing facility */
+    TRACE_DEINIT();
 
     return 0;
 }

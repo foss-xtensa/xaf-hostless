@@ -1,15 +1,17 @@
-/*******************************************************************************
-* Copyright (c) 2015-2020 Cadence Design Systems, Inc.
-* 
+/*
+* Copyright (c) 2015-2021 Cadence Design Systems Inc.
+*
 * Permission is hereby granted, free of charge, to any person obtaining
 * a copy of this software and associated documentation files (the
-* "Software"), to use this Software with Cadence processor cores only and 
-* not with any other processors and platforms, subject to
+* "Software"), to deal in the Software without restriction, including
+* without limitation the rights to use, copy, modify, merge, publish,
+* distribute, sublicense, and/or sell copies of the Software, and to
+* permit persons to whom the Software is furnished to do so, subject to
 * the following conditions:
-* 
+*
 * The above copyright notice and this permission notice shall be included
 * in all copies or substantial portions of the Software.
-* 
+*
 * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
 * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
 * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
@@ -17,8 +19,7 @@
 * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
 * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-******************************************************************************/
+*/
 #include <xtensa/simcall-errno.h>
 #include "xaf-api.h"
 
@@ -26,7 +27,21 @@
 #define XAF_AUX_POOL_SIZE                   32
 
 /* ...length of auxiliary pool messages */
-#define XAF_AUX_POOL_MSG_LENGTH             128
+#define XAF_AUX_POOL_MSG_LENGTH             256
+
+/* ...size of config pool for communication with HiFi */
+#define XAF_EXT_CFG_POOL_SIZE               1
+
+/* ... max allowed length of config pool messages */
+#define XAF_MAX_EXT_CFG_BUF_LEN             (1024 * 8)
+
+/* ...Overhead for ext config per param (worst case, non-zero copy option)
+ * sizeof(xf_ext_param_msg_t) + sizeof(xaf_ext_buffer_t) +
+ * sizeof(UWORD32) for holding the buffer + 4 bytes for size alignment */
+#define XAF_EXT_CFG_OVERHEAD                (32)
+
+#define XAF_MAX_EXT_CONFIG_PARAMS           (XAF_AUX_POOL_MSG_LENGTH / XAF_EXT_CFG_OVERHEAD)
+
 #define XAF_MAX_CONFIG_PARAMS               (XAF_AUX_POOL_MSG_LENGTH >> 3)
 
 #define MAX_IO_PORTS                        (XF_CFG_MAX_IN_PORTS + XF_CFG_MAX_OUT_PORTS)
@@ -44,16 +59,6 @@ typedef enum {
 typedef enum {
     XAF_COMP_RESET          = 0,
     XAF_COMP_CREATE         = 1,
-    XAF_COMP_SET_CONFIG     = 2,
-    XAF_COMP_CONNECT        = 3,
-    XAF_COMP_DISCONNECT     = 4,
-    XAF_COMP_GET_CONFIG     = 5,
-    XAF_COMP_PROCESS        = 6,
-    XAF_COMP_GET_STATUS     = 7,
-    XAF_COMP_PAUSE          = 8,
-    XAF_COMP_RESUME         = 9,
-    XAF_COMP_PROBE_START    = 10,
-    XAF_COMP_PROBE_STOP     = 11,
     XAF_COMP_NSTATES
 } xaf_comp_state;
 
@@ -69,6 +74,17 @@ typedef struct xaf_connect_map_s {
     void               *ptr;
     UWORD32             port;
 } xaf_connect_map_t;
+
+#ifndef XA_DISABLE_EVENT
+typedef struct xf_app_event_channel xf_app_event_channel_t;
+#endif
+
+typedef struct xaf_node_chain_s  xaf_node_chain_t;
+struct xaf_node_chain_s {
+    xaf_node_chain_t *head;
+    UWORD32           next_offset;
+    xf_lock_t         lock;
+};
 
 typedef struct xaf_comp xaf_comp_t;
 
@@ -98,6 +114,9 @@ struct xaf_comp {
 
     xf_pool_t       *inpool;
     xf_pool_t       *outpool;
+    xf_pool_t       *ext_cfg_pool;
+    xf_buffer_t     *p_config_buf;
+    UWORD32          cfg_param_ext_buf_size_max;
     void                *pout_buf[1];
     void                *p_input[XAF_MAX_INBUFS];   //TENA-2196
     UWORD32                ninbuf;
@@ -111,10 +130,19 @@ struct xaf_comp {
     void           *comp_ptr; 
 
     xf_handle_t     handle;
+
+#ifndef XA_DISABLE_EVENT
+    UWORD32         error_channel_ctl;
+#endif
 };
 
 typedef struct xaf_adev_s {
-    xaf_comp_t  *comp_chain;
+
+    xaf_node_chain_t comp_chain;
+    
+#ifndef XA_DISABLE_EVENT
+    xaf_node_chain_t event_chain;
+#endif
 
     UWORD32 n_comp;
 
@@ -127,4 +155,10 @@ typedef struct xaf_adev_s {
     xaf_adev_state  adev_state;
 
     xf_proxy_t   proxy;
+
+#ifndef XA_DISABLE_EVENT
+    xa_app_submit_event_cb_t cdata;
+#endif
+
+    UWORD32 dsp_thread_priority;
 } xaf_adev_t;

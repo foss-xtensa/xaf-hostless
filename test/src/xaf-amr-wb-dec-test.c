@@ -1,15 +1,17 @@
-/*******************************************************************************
-* Copyright (c) 2015-2020 Cadence Design Systems, Inc.
-* 
+/*
+* Copyright (c) 2015-2021 Cadence Design Systems Inc.
+*
 * Permission is hereby granted, free of charge, to any person obtaining
 * a copy of this software and associated documentation files (the
-* "Software"), to use this Software with Cadence processor cores only and 
-* not with any other processors and platforms, subject to
+* "Software"), to deal in the Software without restriction, including
+* without limitation the rights to use, copy, modify, merge, publish,
+* distribute, sublicense, and/or sell copies of the Software, and to
+* permit persons to whom the Software is furnished to do so, subject to
 * the following conditions:
-* 
+*
 * The above copyright notice and this permission notice shall be included
 * in all copies or substantial portions of the Software.
-* 
+*
 * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
 * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
 * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
@@ -17,8 +19,7 @@
 * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
 * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-******************************************************************************/
+*/
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -35,6 +36,10 @@
 #define AUDIO_COMP_BUF_SIZE    (1024 << 7)
 
 #define NUM_COMP_IN_GRAPH       1
+
+#ifndef XA_DEC_INIT_WO_INP_TEST
+#define XA_DEC_INIT_WO_INP_TEST
+#endif
 
 //component parameters
 #define AMR_WB_DEC_PCM_WIDTH       16
@@ -65,15 +70,21 @@ XA_ERRORCODE xa_vorbis_decoder(xa_codec_handle_t var1, WORD32 var2, WORD32 var3,
 XA_ERRORCODE xa_dummy_aec22(xa_codec_handle_t p_xa_module_obj, WORD32 i_cmd, WORD32 i_idx, pVOID pv_value) {return 0;}
 XA_ERRORCODE xa_dummy_aec23(xa_codec_handle_t p_xa_module_obj, WORD32 i_cmd, WORD32 i_idx, pVOID pv_value) {return 0;}
 XA_ERRORCODE xa_pcm_split(xa_codec_handle_t p_xa_module_obj, WORD32 i_cmd, WORD32 i_idx, pVOID pv_value) {return 0;}
-XA_ERRORCODE xa_pcm_mix(xa_codec_handle_t p_xa_module_obj, WORD32 i_cmd, WORD32 i_idx, pVOID pv_value) {return 0;}
+XA_ERRORCODE xa_mimo_mix(xa_codec_handle_t p_xa_module_obj, WORD32 i_cmd, WORD32 i_idx, pVOID pv_value) {return 0;}
 XA_ERRORCODE xa_dummy_wwd(xa_codec_handle_t var1, WORD32 var2, WORD32 var3, pVOID var4){return 0;}
 XA_ERRORCODE xa_dummy_hbuf(xa_codec_handle_t var1, WORD32 var2, WORD32 var3, pVOID var4){return 0;}
 XA_ERRORCODE xa_opus_encoder(xa_codec_handle_t var1, WORD32 var2, WORD32 var3, pVOID var4){return 0;}
 XA_ERRORCODE xa_dummy_wwd_msg(xa_codec_handle_t var1, WORD32 var2, WORD32 var3, pVOID var4){return 0;}
 XA_ERRORCODE xa_dummy_hbuf_msg(xa_codec_handle_t var1, WORD32 var2, WORD32 var3, pVOID var4){return 0;}
+XA_ERRORCODE xa_opus_decoder(xa_codec_handle_t p_xa_module_obj, WORD32 i_cmd, WORD32 i_idx, pVOID pv_value) {return 0;}
+XA_ERRORCODE xa_microspeech_fe(xa_codec_handle_t var1, WORD32 var2, WORD32 var3, pVOID var4){return 0;}
+XA_ERRORCODE xa_microspeech_inference(xa_codec_handle_t var1, WORD32 var2, WORD32 var3, pVOID var4){return 0;}
+XA_ERRORCODE xa_person_detect_inference(xa_codec_handle_t var1, WORD32 var2, WORD32 var3, pVOID var4){return 0;}
+XA_ERRORCODE xa_keyword_detection_inference(xa_codec_handle_t var1, WORD32 var2, WORD32 var3, pVOID var4){return 0;}
 
 static int amr_wb_setup(void *p_decoder)
 {
+#ifndef XA_DEC_INIT_WO_INP_TEST
     int param[6];
 
     param[0] = XA_AMR_WB_DEC_CONFIG_PARAM_PCM_WDSZ;
@@ -86,6 +97,23 @@ static int amr_wb_setup(void *p_decoder)
     param[5] = AMR_WB_DEC_CHANNELS;
 
     return(xaf_comp_set_config(p_decoder, 3, &param[0]));
+#else
+    int param[8];
+
+    param[0] = XA_AMR_WB_DEC_CONFIG_PARAM_PCM_WDSZ;
+    param[1] = AMR_WB_DEC_PCM_WIDTH;
+
+    param[2] = XA_AMR_WB_DEC_CONFIG_PARAM_SAMP_FREQ;
+    param[3] = AMR_WB_DEC_SAMPLE_RATE;
+
+    param[4] = XA_AMR_WB_DEC_CONFIG_PARAM_NUM_CHANNELS;
+    param[5] = AMR_WB_DEC_CHANNELS;
+
+    param[6] = XAF_COMP_CONFIG_PARAM_DEC_INIT_WO_INP;
+    param[7] = 1;
+
+    return(xaf_comp_set_config(p_decoder, 4, &param[0]));
+#endif
 }
 
 static int get_comp_config(void *p_comp, xaf_format_t *comp_format)
@@ -222,18 +250,26 @@ int main_task(int argc, char **argv)
 
     mem_handle = mem_init();
 
-    TST_CHK_API(xaf_adev_open(&p_adev, audio_frmwk_buf_size, audio_comp_buf_size, mem_malloc, mem_free), "xaf_adev_open");
+    xaf_adev_config_t adev_config;
+    TST_CHK_API(xaf_adev_config_default_init(&adev_config), "xaf_adev_config_default_init");
+
+    adev_config.pmem_malloc =  mem_malloc;
+    adev_config.pmem_free =  mem_free;
+    adev_config.audio_framework_buffer_size =  audio_frmwk_buf_size;
+    adev_config.audio_component_buffer_size =  audio_comp_buf_size;
+    TST_CHK_API(xaf_adev_open(&p_adev, &adev_config),  "xaf_adev_open");
 
     FIO_PRINTF(stdout, "Audio Device Ready\n");
 
     /* ...create decoder component */
     comp_type = XAF_DECODER;
-    TST_CHK_API(xaf_comp_create(p_adev, &p_decoder, dec_id, 2, 1, &dec_inbuf[0], comp_type),"xaf_comp_create");
+    TST_CHK_API_COMP_CREATE(p_adev, &p_decoder, dec_id, 2, 1, &dec_inbuf[0], comp_type, "xaf_comp_create");
     TST_CHK_API(dec_setup(p_decoder), "dec_setup");
 
     /* ...start decoder component */
     TST_CHK_API(xaf_comp_process(p_adev, p_decoder, NULL, 0, XAF_START_FLAG), "xaf_comp_process");
 
+#ifndef XA_DEC_INIT_WO_INP_TEST    
     /* ...feed input to decoder component */
     for (i=0; i<2; i++)
     {
@@ -278,6 +314,70 @@ int main_task(int argc, char **argv)
         exit(-1);
     }
 
+#else
+    TST_CHK_API(xaf_comp_get_status(p_adev, p_decoder, &dec_status, &dec_info[0]), "xaf_comp_get_status");
+    if (dec_status == XAF_INIT_NEED_INPUT)
+    {
+        /* ...feed input to decoder component */
+        for (i=0; i<2; i++)
+        {
+            TST_CHK_API(read_input(dec_inbuf[i], buf_length, &read_length, p_input, comp_type), "read_input");
+
+            if (read_length)
+                TST_CHK_API(xaf_comp_process(p_adev, p_decoder, dec_inbuf[i], read_length, XAF_INPUT_READY_FLAG), "xaf_comp_process");
+            else
+            {    
+                TST_CHK_API(xaf_comp_process(p_adev, p_decoder, NULL, 0, XAF_INPUT_OVER_FLAG), "xaf_comp_process");
+                break;
+            }
+        }
+
+        while (1)
+        {
+            TST_CHK_API(xaf_comp_get_status(p_adev, p_decoder, &dec_status, &dec_info[0]), "xaf_comp_get_status");
+
+            if (dec_status == XAF_INIT_DONE || dec_status == XAF_EXEC_DONE) break;
+
+            if (dec_status == XAF_NEED_INPUT)
+            {
+                void *p_buf = (void *) dec_info[0];
+                int size    = dec_info[1];
+
+                TST_CHK_API(read_input(p_buf, size, &read_length, p_input, comp_type), "read_input");
+
+                if (read_length)
+                    TST_CHK_API(xaf_comp_process(p_adev, p_decoder, p_buf, read_length, XAF_INPUT_READY_FLAG), "xaf_comp_process");
+                else
+                {
+                    TST_CHK_API(xaf_comp_process(p_adev, p_decoder, NULL, 0, XAF_INPUT_OVER_FLAG), "xaf_comp_process");
+                    break;
+                }
+            }
+        }
+    }
+    else if (dec_status == XAF_INIT_DONE)
+    {
+        /* ...initialization completed without input, now feed input to decoder component for pipeline to work */
+        for (i=0; i<2; i++)
+        {
+            TST_CHK_API(read_input(dec_inbuf[i], buf_length, &read_length, p_input, comp_type), "read_input");
+
+            if (read_length)
+                TST_CHK_API(xaf_comp_process(p_adev, p_decoder, dec_inbuf[i], read_length, XAF_INPUT_READY_FLAG), "xaf_comp_process");
+            else
+            {    
+                TST_CHK_API(xaf_comp_process(p_adev, p_decoder, NULL, 0, XAF_INPUT_OVER_FLAG), "xaf_comp_process");
+                break;
+            }
+        }
+    }
+    else
+    {
+        FIO_PRINTF(stderr, "Failed to init");
+        exit(-1);
+    }
+#endif
+    
     TST_CHK_API(get_comp_config(p_decoder, &dec_format), "get_comp_config");
 
 #ifdef XAF_PROFILE
@@ -294,7 +394,7 @@ int main_task(int argc, char **argv)
     dec_thread_args[6]= (void *)&i; //dummy
 
     /* ...init done, begin execution thread */
-    __xf_thread_create(&dec_thread, comp_process_entry, &dec_thread_args[0], "Decoder Thread", dec_stack, STACK_SIZE, 7);
+    __xf_thread_create(&dec_thread, comp_process_entry, &dec_thread_args[0], "Decoder Thread", dec_stack, STACK_SIZE, XAF_APP_THREADS_PRIORITY);
 
     __xf_thread_join(&dec_thread, NULL);
     
@@ -306,15 +406,15 @@ int main_task(int argc, char **argv)
 
     {
         /* collect memory stats before closing the device */
-        WORD32 meminfo[3];
+        WORD32 meminfo[5];
         if(xaf_get_mem_stats(p_adev, &meminfo[0]))
         {
             FIO_PRINTF(stdout,"Init is incomplete, reliable memory stats are unavailable.\n");
         }
         else
         {
-            FIO_PRINTF(stderr,"Local Memory used by DSP Components, in bytes            : %8d of %8d\n", meminfo[0], AUDIO_COMP_BUF_SIZE);
-            FIO_PRINTF(stderr,"Shared Memory used by Components and Framework, in bytes : %8d of %8d\n", meminfo[1], AUDIO_FRMWK_BUF_SIZE);
+            FIO_PRINTF(stderr,"Local Memory used by DSP Components, in bytes            : %8d of %8d\n", meminfo[0], adev_config.audio_component_buffer_size);
+            FIO_PRINTF(stderr,"Shared Memory used by Components and Framework, in bytes : %8d of %8d\n", meminfo[1], adev_config.audio_framework_buffer_size);
             FIO_PRINTF(stderr,"Local Memory used by Framework, in bytes                 : %8d\n", meminfo[2]);
         }
     }
@@ -336,7 +436,9 @@ int main_task(int argc, char **argv)
     if (ofp) fio_fclose(ofp);
     
     fio_quit();
+
+    /* ...deinitialize tracing facility */
+    TRACE_DEINIT();
     
     return 0;
 }
-

@@ -1,10 +1,12 @@
 #
-# Copyright (c) 2015-2020 Cadence Design Systems, Inc.
+# Copyright (c) 2015-2021 Cadence Design Systems, Inc.
 # 
 # Permission is hereby granted, free of charge, to any person obtaining
 # a copy of this software and associated documentation files (the
-# "Software"), to use this Software with Cadence processor cores only and 
-# not with any other processors and platforms, subject to
+# "Software"), to deal in the Software without restriction, including
+# without limitation the rights to use, copy, modify, merge, publish,
+# distribute, sublicense, and/or sell copies of the Software, and to
+# permit persons to whom the Software is furnished to do so, subject to
 # the following conditions:
 # 
 # The above copyright notice and this permission notice shall be included
@@ -24,6 +26,8 @@
 # Basic configuration (if not given in setup script)
 ################################################################################
 XA_MSGQ ?= 1
+XF_TRACE ?= 0
+XA_DISABLE_EVENT ?= 0
 
 ################################################################################
 # Environment setup
@@ -34,6 +38,7 @@ OBJDIR = objs$(S)test
 default:	all
 
 XA_RTOS ?= xos
+TFLM_SUPPORT ?= 0
 
 ### A list of component-enabler switches(enabled by default) ###
 XA_MP3_DECODER = 1
@@ -49,7 +54,13 @@ XA_VORBIS_DECODER = 1
 XA_AEC22 = 1
 XA_AEC23 = 1
 XA_PCM_SPLIT = 1
-XA_PCM_MIX = 1
+XA_MIMO_MIX = 1
+XA_OPUS_ENCODER = 1
+XA_OPUS_DECODER = 1
+ifeq ($(TFLM_SUPPORT),1)
+XA_TFLM_MICROSPEECH = 1
+XA_TFLM_PERSON_DETECT = 1
+endif
 
 UNAME_S := $(shell uname -s)
 
@@ -62,7 +73,8 @@ MV = mv
 endif
 
 # Common to both cores
-  CC = xt-xcc $(XTCORE)
+  CC = xt-clang $(XTCORE)
+  CPLUSPLUS = xt-clang++ $(XTCORE)
   OBJCOPY = xt-objcopy
   ISS = xt-run $(XTCORE)
   XTGDB = xt-gdb
@@ -76,8 +88,7 @@ endif
   CFLAGS += -DISS_RUN
   CFLAGS += -DXAF_PROFILE
 
-#CFLAGS += -Wno-unused -DXF_DEBUG=1 -DXF_TRACE=1
-CFLAGS += -DXF_DEBUG=1
+#CFLAGS += -Wno-unused -DXF_TRACE=1
 CFLAGS += -DHIFI_ONLY_XAF
 
 ifneq (,$(findstring RF-2015.2, $(XTENSA_SYSTEM)))
@@ -91,8 +102,8 @@ RUN = $(ISS)
 CFLAGS +=-DFIO_LOCAL_FS
 
 ifeq ($(DEBUG),1)
+  CFLAGS += -DXF_DEBUG=1
   OPT_O2 = -O0 -g
-  LDFLAGS += -lxtutil
 else
   OPT_O2 = -O2
 endif
@@ -107,18 +118,39 @@ ifeq ($(XA_RTOS),freertos)
   FREERTOS_BASE ?= $(ROOTDIR)/FreeRTOS
   CFLAGS += -DHAVE_FREERTOS
   INCLUDES += -I$(ROOTDIR)/include/sysdeps/freertos/include \
-			  -I$(FREERTOS_BASE)/lib/include \
-			  -I$(FREERTOS_BASE)/lib/include/private \
-			  -I$(FREERTOS_BASE)/lib/FreeRTOS/portable/XCC/Xtensa \
+			  -I$(FREERTOS_BASE)/include \
+			  -I$(FREERTOS_BASE)/portable/XCC/Xtensa \
 			  -I$(FREERTOS_BASE)/demos/cadence/sim/common/config_files
   LDFLAGS += -L$(FREERTOS_BASE)/demos/cadence/sim/build/$(XTENSA_CORE) \
 			 -lfreertos
 endif
 
-ifeq ($(TRACE), 1)
-  CFLAGS +=-DXF_TRACE=1
+ifeq ($(TFLM_SUPPORT),1)
+ifeq ($(CORE),hifi5)
+  target = hifi5
+else
+  target = fusion_f1
+endif
+  TFLM_BASE ?= $(ROOTDIR)/tensorflow
+  vpath %.cpp $(ROOTDIR)/test/plugins/cadence/tflm_common
+  vpath %.c   $(ROOTDIR)/test/plugins/cadence/tflm_common
+  CPPFLAGS = -std=c++11 -DTF_LITE_STATIC_MEMORY
+  INCLUDES += -I$(TFLM_BASE) \
+              -I$(TFLM_BASE)/tensorflow/lite/micro/tools/make/downloads/flatbuffers/include
+  PLUGINOBJS_TFLM_COMMON_CPP = tflm-inference-api.o
+  PLUGINOBJS_TFLM_COMMON     = xa-tflm-inference-api.o
+  LDFLAGS += -std=c++11
+  LDFLAGS += -Wl,--gc-sections
+  LDFLAGS += $(TFLM_BASE)/tensorflow/lite/micro/tools/make/gen/xtensa_$(target)_default/lib/libtensorflow-microlite.a 
 endif
 
+ifneq ($(XF_TRACE), 0)
+  CFLAGS +=-DXF_TRACE=$(XF_TRACE)
+endif
+
+ifeq ($(XA_DISABLE_EVENT), 1)
+   CFLAGS += -DXA_DISABLE_EVENT
+endif
 
 CFLAGS += $(EXTRA_CFLAGS)
 LDFLAGS += $(EXTRA_LDFLAGS)
@@ -130,6 +162,8 @@ vpath %.c $(ROOTDIR)/test/src
 vpath %.c $(ROOTDIR)/test/plugins
 
 ### Create a variable for each test-application's final binary/executable name ###
+BIN0 = xa_af_tflite_microspeech_test
+BRDBIN0 = xa_af_tflite_microspeech_test.bin
 BIN1 = xa_af_hostless_test
 BRDBIN1 = xa_af_hostless_test.bin
 BIN2 = xa_af_dec_test
@@ -154,14 +188,23 @@ BIN11 = xa_af_capturer_mp3_enc_test
 BRDBIN11 = xa_af_capturer_mp3_enc_test.bin
 BIN14 = xa_af_vorbis_dec_test
 BRDBIN14 = xa_af_vorbis_dec_test.bin
-BIN18 = xa_af_pcm_mix_test
-BRDBIN18 = xa_af_pcm_mix_test.bin
+BIN18 = xa_af_mimo_mix_test
+BRDBIN18 = xa_af_mimo_mix_test.bin
 BIN20 = xa_af_playback_usecase_test
 BRDBIN20 = xa_af_playback_usecase_test.bin
+BIN21 = xa_af_opus_encoder_test
+BRDBIN21 = xa_af_opus_encoder_test.bin
+BIN22 = xa_af_opus_decoder_test
+BRDBIN22 = xa_af_opus_decoder_test.bin
 BIN30 = xa_af_renderer_ref_port_test
 BRDBIN30 = xa_af_renderer_ref_port_test.bin
+BIN33 = xa_af_tflite_person_detect_test
+BRDBIN33 = xa_af_tflite_person_detect_test.bin
+BIN34 = xa_af_person_detect_microspeech_test
+BRDBIN34 = xa_af_person_detect_microspeech_test.bin
 
 ### Create a variable mapping each test-application source file into the obj (.o) file ###
+APP0OBJS = xaf-capturer-tflite-microspeech-test.o
 APP1OBJS = xaf-pcm-gain-test.o
 APP2OBJS = xaf-dec-test.o
 APP3OBJS = xaf-dec-mix-test.o
@@ -174,12 +217,18 @@ APP9OBJS = xaf-gain-renderer-test.o
 APP10OBJS = xaf-capturer-pcm-gain-test.o
 APP11OBJS = xaf-capturer-mp3-enc-test.o
 APP14OBJS = xaf-vorbis-dec-test.o
-APP18OBJS = xaf-pcm-mix-test.o
+APP18OBJS = xaf-mimo-mix-test.o
 APP20OBJS = xaf-playback-usecase-test.o
+APP21OBJS = xaf-opus-enc-test.o
+APP22OBJS = xaf-opus-dec-test.o
 APP30OBJS = xaf-renderer-ref-port-test.o
+APP33OBJS = xaf-tflite-person-detect-test.o
+APP34OBJS = xaf-person-detect-microspeech-test.o
+
 MEMOBJS = xaf-mem-test.o xaf-clk-test.o xaf-utils-test.o xaf-fio-test.o
 
 ### Create a variable which is a mapfile-name for each of the test-application in which the memory map of the binary/executable created is available. ###
+MAPFILE0  = map_$(BIN0).txt
 MAPFILE1  = map_$(BIN1).txt
 MAPFILE2  = map_$(BIN2).txt
 MAPFILE3  = map_$(BIN3).txt
@@ -194,21 +243,50 @@ MAPFILE11  = map_$(BIN11).txt
 MAPFILE14  = map_$(BIN14).txt
 MAPFILE18  = map_$(BIN18).txt
 MAPFILE20  = map_$(BIN20).txt
+MAPFILE21  = map_$(BIN21).txt
+MAPFILE22  = map_$(BIN22).txt
 MAPFILE30  = map_$(BIN30).txt
+MAPFILE33  = map_$(BIN33).txt
+MAPFILE34  = map_$(BIN34).txt
 
 PLUGINOBJS_COMMON += xa-factory.o
 INCLUDES += \
     -I$(ROOTDIR)/test/include \
+    -I$(ROOTDIR)/test/plugins \
     -I$(ROOTDIR)/test/include/audio \
     -I$(ROOTDIR)/include \
     -I$(ROOTDIR)/include/audio
+
 all:  $(BIN1)
+
+tflm: $(BIN0) $(BIN33) $(BIN34)
 
 mimo: $(BIN18) $(BIN20) $(BIN30)
 
-all-dec: $(BIN1) $(BIN2) $(BIN3) $(BIN4) $(BIN5) $(BIN6) $(BIN7) $(BIN8) $(BIN9) $(BIN10) $(BIN11) $(BIN14) mimo
+all-dec: $(BIN1) $(BIN2) $(BIN3) $(BIN4) $(BIN5) $(BIN6) $(BIN7) $(BIN8) $(BIN9) $(BIN10) $(BIN11) $(BIN14) $(BIN21) $(BIN22) mimo
 
 ##########################################################################################
+ifeq ($(XA_TFLM_PERSON_DETECT), 1)
+PLUGINOBJS_TFLM_PERSON_DETECT += person_detect_model_data.o
+PLUGINOBJS_TFLM_PERSON_DETECT_CPP = person-detect-wrapper-api.o
+INCLUDES += -I$(ROOTDIR)/test/plugins/cadence/tflm_person_detect
+INCLUDES += -I$(ROOTDIR)/test/plugins/cadence/tflm_common
+CFLAGS += -DXA_TFLM_PERSON_DETECT=1
+vpath %.c $(ROOTDIR)/test/plugins/cadence/tflm_person_detect
+vpath %.cpp $(ROOTDIR)/test/plugins/cadence/tflm_person_detect
+endif
+
+ifeq ($(XA_TFLM_MICROSPEECH), 1)
+PLUGINOBJS_TFLM_MICROSPEECH += xa-microspeech-frontend.o microspeech_model_data.o
+PLUGINOBJS_TFLM_MICROSPEECH_CPP = microspeech-frontend-wrapper-api.o microspeech-inference-wrapper-api.o
+INCLUDES += -I$(ROOTDIR)/test/plugins/cadence/tflm_microsspeech
+INCLUDES += -I$(ROOTDIR)/test/plugins/cadence/tflm_common
+CFLAGS += -DXA_TFLM_MICROSPEECH=1
+LDFLAGS += $(TFLM_BASE)/tensorflow/lite/micro/tools/make/gen/xtensa_$(target)_default/lib/libmicro_speech_frontend.a	
+vpath %.c $(ROOTDIR)/test/plugins/cadence/tflm_microspeech
+vpath %.cpp $(ROOTDIR)/test/plugins/cadence/tflm_microspeech
+endif
+
 ifeq ($(XA_MP3_DECODER), 1)
   PLUGINLIBS_MP3_DEC = $(ROOTDIR)/test/plugins/cadence/mp3_dec/lib/xa_mp3_dec.a
 PLUGINOBJS_MP3_DEC += xa-mp3-decoder.o
@@ -305,15 +383,34 @@ CFLAGS += -DXA_PCM_SPLIT=1
 vpath %.c $(ROOTDIR)/test/plugins/cadence/pcm_split
 endif
 
-ifeq ($(XA_PCM_MIX), 1)
-PLUGINOBJS_PCM_MIX += xa-pcm-mix.o
-INCLUDES += -I$(ROOTDIR)/test/plugins/cadence/pcm_mix
-CFLAGS += -DXA_PCM_MIX=1
-vpath %.c $(ROOTDIR)/test/plugins/cadence/pcm_mix
+ifeq ($(XA_MIMO_MIX), 1)
+PLUGINOBJS_MIMO_MIX += xa-mimo-mix.o
+INCLUDES += -I$(ROOTDIR)/test/plugins/cadence/mimo_mix
+CFLAGS += -DXA_MIMO_MIX=1
+vpath %.c $(ROOTDIR)/test/plugins/cadence/mimo_mix
 endif
+
+ifeq ($(XA_OPUS_ENCODER), 1)
+PLUGINLIBS_OPUS_ENC = $(ROOTDIR)/test/plugins/cadence/opus/lib/xa_opus_codec.a
+PLUGINOBJS_OPUS_ENC = xa-opus-encoder.o
+INCLUDES += -I$(ROOTDIR)/test/plugins/cadence/opus
+CFLAGS += -DXA_OPUS_ENCODER=1
+vpath %.c $(ROOTDIR)/test/plugins/cadence/opus
+endif
+
+ifeq ($(XA_OPUS_DECODER), 1)
+PLUGINLIBS_OPUS_DEC = $(ROOTDIR)/test/plugins/cadence/opus_dec/lib/xa_opus_codec.a
+PLUGINOBJS_OPUS_DEC = xa-opus-decoder.o
+PLUGINOBJS_OPUS_DEC += opus_header.o
+INCLUDES += -I$(ROOTDIR)/test/plugins/cadence/opus_dec
+CFLAGS += -DXA_OPUS_DECODER=1
+vpath %.c $(ROOTDIR)/test/plugins/cadence/opus_dec
+endif
+
 
 ##########################################################################################
 ### Add directory prefix to each of the test-application obj file ###
+OBJS_APP0OBJS = $(addprefix $(OBJDIR)/,$(APP0OBJS))
 OBJS_APP1OBJS = $(addprefix $(OBJDIR)/,$(APP1OBJS))
 OBJS_APP2OBJS = $(addprefix $(OBJDIR)/,$(APP2OBJS))
 OBJS_APP3OBJS = $(addprefix $(OBJDIR)/,$(APP3OBJS))
@@ -328,10 +425,20 @@ OBJS_APP11OBJS = $(addprefix $(OBJDIR)/,$(APP11OBJS))
 OBJS_APP14OBJS = $(addprefix $(OBJDIR)/,$(APP14OBJS))
 OBJS_APP18OBJS = $(addprefix $(OBJDIR)/,$(APP18OBJS))
 OBJS_APP20OBJS = $(addprefix $(OBJDIR)/,$(APP20OBJS))
+OBJS_APP21OBJS = $(addprefix $(OBJDIR)/,$(APP21OBJS))
+OBJS_APP22OBJS = $(addprefix $(OBJDIR)/,$(APP22OBJS))
 OBJS_APP30OBJS = $(addprefix $(OBJDIR)/,$(APP30OBJS))
+OBJS_APP33OBJS = $(addprefix $(OBJDIR)/,$(APP33OBJS))
+OBJS_APP34OBJS = $(addprefix $(OBJDIR)/,$(APP34OBJS))
 
 ### Add directory prefix to plugin obj files of each test-application ###
 OBJ_PLUGINOBJS_COMMON = $(addprefix $(OBJDIR)/,$(PLUGINOBJS_COMMON))
+OBJ_PLUGINOBJS_TFLM_MICROSPEECH = $(addprefix $(OBJDIR)/,$(PLUGINOBJS_TFLM_MICROSPEECH))
+OBJ_PLUGINOBJS_TFLM_MICROSPEECH_CPP = $(addprefix $(OBJDIR)/,$(PLUGINOBJS_TFLM_MICROSPEECH_CPP))
+OBJ_PLUGINOBJS_TFLM_PERSON_DETECT = $(addprefix $(OBJDIR)/,$(PLUGINOBJS_TFLM_PERSON_DETECT))
+OBJ_PLUGINOBJS_TFLM_PERSON_DETECT_CPP = $(addprefix $(OBJDIR)/,$(PLUGINOBJS_TFLM_PERSON_DETECT_CPP))
+OBJ_PLUGINOBJS_TFLM_COMMON_CPP = $(addprefix $(OBJDIR)/,$(PLUGINOBJS_TFLM_COMMON_CPP))
+OBJ_PLUGINOBJS_TFLM_COMMON = $(addprefix $(OBJDIR)/,$(PLUGINOBJS_TFLM_COMMON))
 OBJ_PLUGINOBJS_MP3_DEC = $(addprefix $(OBJDIR)/,$(PLUGINOBJS_MP3_DEC))
 OBJ_PLUGINOBJS_MP3_ENC = $(addprefix $(OBJDIR)/,$(PLUGINOBJS_MP3_ENC))
 OBJ_PLUGINOBJS_SRC_PP = $(addprefix $(OBJDIR)/,$(PLUGINOBJS_SRC_PP))
@@ -345,14 +452,17 @@ OBJ_PLUGINOBJS_VORBIS_DEC = $(addprefix $(OBJDIR)/,$(PLUGINOBJS_VORBIS_DEC))
 OBJ_PLUGINOBJS_AEC22 = $(addprefix $(OBJDIR)/,$(PLUGINOBJS_AEC22))
 OBJ_PLUGINOBJS_AEC23 = $(addprefix $(OBJDIR)/,$(PLUGINOBJS_AEC23))
 OBJ_PLUGINOBJS_PCM_SPLIT = $(addprefix $(OBJDIR)/,$(PLUGINOBJS_PCM_SPLIT))
-OBJ_PLUGINOBJS_PCM_MIX = $(addprefix $(OBJDIR)/,$(PLUGINOBJS_PCM_MIX))
+OBJ_PLUGINOBJS_MIMO_MIX = $(addprefix $(OBJDIR)/,$(PLUGINOBJS_MIMO_MIX))
 OBJ_PLUGINOBJS_CAPTURER_USECASE = $(addprefix $(OBJDIR)/,$(PLUGINOBJS_CAPTURER_USECASE))
+OBJ_PLUGINOBJS_OPUS_ENC = $(addprefix $(OBJDIR)/,$(PLUGINOBJS_OPUS_ENC))
+OBJ_PLUGINOBJS_OPUS_DEC = $(addprefix $(OBJDIR)/,$(PLUGINOBJS_OPUS_DEC))
 OBJ_MEMOBJS = $(addprefix $(OBJDIR)/,$(MEMOBJS))
 
 ### Create a variable containing the common list of obj files required to build a particular test-application binary. ###
 LIBS_LIST_COMMON = $(DSPLIB)  $(OBJ_MEMOBJS) $(OBJ_PLUGINOBJS_COMMON)
 
 ### Create a variable containing the complete list of obj files required to build a particular test-application binary. ###
+LIBS_LIST0 = $(LIBS_LIST_COMMON) $(OBJ_PLUGINOBJS_TFLM_MICROSPEECH) $(OBJ_PLUGINOBJS_TFLM_MICROSPEECH_CPP) $(OBJ_PLUGINOBJS_TFLM_COMMON_CPP) $(OBJ_PLUGINOBJS_TFLM_COMMON) $(OBJ_PLUGINOBJS_CAPTURER)
 LIBS_LIST1 = $(LIBS_LIST_COMMON) $(OBJ_PLUGINOBJS_PCM_GAIN)
 LIBS_LIST2 = $(LIBS_LIST_COMMON) $(OBJ_PLUGINOBJS_MP3_DEC)
 LIBS_LIST3 = $(LIBS_LIST_COMMON) $(OBJ_PLUGINOBJS_MP3_DEC) $(OBJ_PLUGINOBJS_MIXER)
@@ -365,9 +475,13 @@ LIBS_LIST9 = $(LIBS_LIST_COMMON) $(OBJ_PLUGINOBJS_PCM_GAIN) $(OBJ_PLUGINOBJS_REN
 LIBS_LIST10 = $(LIBS_LIST_COMMON) $(OBJ_PLUGINOBJS_PCM_GAIN) $(OBJ_PLUGINOBJS_CAPTURER)
 LIBS_LIST11 = $(LIBS_LIST_COMMON) $(OBJ_PLUGINOBJS_MP3_ENC) $(OBJ_PLUGINOBJS_CAPTURER)
 LIBS_LIST14 = $(LIBS_LIST_COMMON) $(OBJ_PLUGINOBJS_VORBIS_DEC)
-LIBS_LIST18 = $(LIBS_LIST_COMMON) $(OBJ_PLUGINOBJS_PCM_MIX) $(OBJ_PLUGINOBJS_PCM_GAIN)
+LIBS_LIST18 = $(LIBS_LIST_COMMON) $(OBJ_PLUGINOBJS_MIMO_MIX) $(OBJ_PLUGINOBJS_PCM_GAIN)
 LIBS_LIST20 = $(LIBS_LIST_COMMON) $(OBJ_PLUGINOBJS_PCM_SPLIT) $(OBJ_PLUGINOBJS_MIXER) $(OBJ_PLUGINOBJS_PCM_GAIN) $(OBJ_PLUGINOBJS_AAC_DEC) $(OBJ_PLUGINOBJS_MP3_DEC) $(OBJ_PLUGINOBJS_SRC_PP)
+LIBS_LIST21 = $(LIBS_LIST_COMMON) $(OBJ_PLUGINOBJS_OPUS_ENC)
+LIBS_LIST22 = $(LIBS_LIST_COMMON) $(OBJ_PLUGINOBJS_OPUS_DEC)
 LIBS_LIST30 = $(LIBS_LIST_COMMON) $(OBJ_PLUGINOBJS_PCM_GAIN) $(OBJ_PLUGINOBJS_RENDERER) $(OBJ_PLUGINOBJS_AEC23)
+LIBS_LIST33 = $(LIBS_LIST_COMMON) $(OBJ_PLUGINOBJS_TFLM_PERSON_DETECT) $(OBJ_PLUGINOBJS_TFLM_PERSON_DETECT_CPP) $(OBJ_PLUGINOBJS_TFLM_COMMON_CPP) $(OBJ_PLUGINOBJS_TFLM_COMMON)
+LIBS_LIST34 = $(LIBS_LIST_COMMON) $(OBJ_PLUGINOBJS_TFLM_PERSON_DETECT) $(OBJ_PLUGINOBJS_TFLM_PERSON_DETECT_CPP) $(OBJ_PLUGINOBJS_TFLM_COMMON_CPP) $(OBJ_PLUGINOBJS_TFLM_COMMON) $(OBJ_PLUGINOBJS_TFLM_MICROSPEECH) $(OBJ_PLUGINOBJS_TFLM_MICROSPEECH_CPP) $(OBJ_PLUGINOBJS_CAPTURER)
 
 pcm-gain:    $(BIN1)
 dec:         $(BIN2)
@@ -377,8 +491,12 @@ amr-wb-dec:  $(BIN5)
 src:         $(BIN6)
 aac-dec:     $(BIN7)
 vorbis:      $(BIN14)
+opus:		 $(BIN21)
+opus-dec: 	 $(BIN22)
 
 ### Add the rule to link and create the final executable binary (bin file) of a test-application. ###
+$(BIN0): $(OBJDIR) $(OBJS_LIST) $(OBJS_APP0OBJS) $(LIBS_LIST0) comp_libs
+	$(CPLUSPLUS) -o $@ $(OBJS_LIST) $(OBJS_APP0OBJS) $(LIBS_LIST0) $(LDFLAGS) $(EXTRA_LIBS) -Wl,-lm -Wl,-Map=$(MAPFILE0)
 $(BIN1): $(OBJDIR) $(OBJS_LIST) $(OBJS_APP1OBJS) $(LIBS_LIST1)
 	$(CC) -o $@ $(OBJS_LIST) $(OBJS_APP1OBJS) $(LIBS_LIST1) $(LDFLAGS) $(EXTRA_LIBS) -Wl,-Map=$(MAPFILE1)
 $(BIN2): $(OBJDIR) $(OBJS_LIST) $(OBJS_APP2OBJS) $(LIBS_LIST2) comp_libs
@@ -407,8 +525,16 @@ $(BIN18): $(OBJDIR) $(OBJS_LIST) $(OBJS_APP18OBJS) $(LIBS_LIST18) comp_libs
 	$(CC) -o $@ $(OBJS_LIST) $(OBJS_APP18OBJS) $(LIBS_LIST18) $(LDFLAGS) $(EXTRA_LIBS) -Wl,-Map=$(MAPFILE18)
 $(BIN20): $(OBJDIR) $(OBJS_LIST) $(OBJS_APP20OBJS) $(LIBS_LIST20) comp_libs
 	$(CC) -o $@ $(OBJS_LIST) $(OBJS_APP20OBJS) $(LIBS_LIST20) $(LDFLAGS) $(EXTRA_LIBS) -Wl,-Map=$(MAPFILE20)
+$(BIN21): $(OBJDIR) $(OBJS_LIST) $(OBJS_APP21OBJS) $(LIBS_LIST21) comp_libs
+	$(CC) -o $@ $(OBJS_LIST) $(OBJS_APP21OBJS) $(LIBS_LIST21) $(LDFLAGS) $(EXTRA_LIBS) -Wl,-Map=$(MAPFILE21)
+$(BIN22): $(OBJDIR) $(OBJS_LIST) $(OBJS_APP22OBJS) $(LIBS_LIST22) comp_libs
+	$(CC) -o $@ $(OBJS_LIST) $(OBJS_APP22OBJS) $(LIBS_LIST22) $(LDFLAGS) $(EXTRA_LIBS) -Wl,-Map=$(MAPFILE22)
 $(BIN30): $(OBJDIR) $(OBJS_LIST) $(OBJS_APP30OBJS) $(LIBS_LIST30) comp_libs
 	$(CC) -o $@ $(OBJS_LIST) $(OBJS_APP30OBJS) $(LIBS_LIST30) $(LDFLAGS) $(EXTRA_LIBS) -Wl,-Map=$(MAPFILE30)
+$(BIN33): $(OBJDIR) $(OBJS_LIST) $(OBJS_APP33OBJS) $(LIBS_LIST33) comp_libs
+	$(CPLUSPLUS) -o $@ $(OBJS_LIST) $(OBJS_APP33OBJS) $(LIBS_LIST33) $(LDFLAGS) $(EXTRA_LIBS) -Wl,-lm -Wl,-Map=$(MAPFILE33)
+$(BIN34): $(OBJDIR) $(OBJS_LIST) $(OBJS_APP34OBJS) $(LIBS_LIST34) comp_libs
+	$(CPLUSPLUS) -o $@ $(OBJS_LIST) $(OBJS_APP34OBJS) $(LIBS_LIST34) $(LDFLAGS) $(EXTRA_LIBS) -Wl,-lm -Wl,-Map=$(MAPFILE34)
 
 %.bin: %
 	$(OBJCOPY) -O binary $< $@
@@ -420,7 +546,15 @@ $(OBJDIR)/%.o: %.c
 	@echo "Compiling $<"
 	$(QUIET) $(CC) -c $(OPT_O2) $(CFLAGS) $(INCLUDES) -o $@ $<
 
-$(OBJS_APP30OBJS)/%.o $(OBJS_APP20OBJS)/%.o $(OBJS_APP19OBJS)/%.o $(OBJS_APP18OBJS)/%.o: %.c
+$(OBJDIR)/%.o: %.cpp
+	@echo "Compiling $<"
+	$(QUIET) $(CC) -c $(CPPFLAGS) $(OPT_O2) $(CFLAGS) $(INCLUDES) -o $@ $<
+
+$(OBJS_APP0OBJS)/%.o: %.c
+	@echo "Compiling $<"
+	$(QUIET) $(CC) -c $(OPT_O2) $(CFLAGS) $(INCLUDES) -o $@ $<
+
+$(OBJS_APP30OBJS)/%.o $(OBJS_APP20OBJS)/%.o $(OBJS_APP19OBJS)/%.o $(OBJS_APP18OBJS)/%.o $(OBJS_APP21OBJS)/%.o $(OBJS_APP22OBJS)/%.o : %.c
 	@echo "Compiling $<"
 	$(QUIET) $(CC) -c $(OPT_O2) $(CFLAGS) $(INCLUDES) -o $@ $<
 
@@ -470,6 +604,14 @@ $(OBJS_APP1OBJS)/%.o: %.c
 	@echo "Compiling $<"
 	$(QUIET) $(CC) -c $(OPT_O2) $(CFLAGS) $(INCLUDES) -o $@ $<
 
+$(OBJS_APP33OBJS)/%.o: %.c
+	@echo "Compiling $<"
+	$(QUIET) $(CC) -c $(OPT_O2) $(CFLAGS) $(INCLUDES) -o $@ $<
+
+$(OBJS_APP34OBJS)/%.o: %.c
+	@echo "Compiling $<"
+	$(QUIET) $(CC) -c $(OPT_O2) $(CFLAGS) $(INCLUDES) -o $@ $<
+
 ### Add a sample test-case under the target 'run' to execute one or a subset of the test-applications ###
 run:
 	$(ECHO) $(RM) $(TEST_OUT)/sine_pcmgain_out.pcm
@@ -490,7 +632,7 @@ run-dec:
 	$(ECHO) $(RM) $(TEST_OUT)/sine_capturer.pcm
 	$(ECHO) $(RM) $(TEST_OUT)/hihat_capturer.mp3
 	$(ECHO) $(RM) $(TEST_OUT)/hihat_vorbis_dec_out.pcm
-	$(ECHO) $(RM) $(TEST_OUT)/pcm_mix_out.pcm
+	$(ECHO) $(RM) $(TEST_OUT)/mimo_mix_out.pcm
 	$(ECHO) $(RM) $(TEST_OUT)/playback_usecase_out*.pcm
 	$(ECHO) $(RM) $(TEST_OUT)/rend_ref_port.*.pcm
 	$(RUN) ./$(BIN1) -infile:$(TEST_INP)/sine.pcm -outfile:$(TEST_OUT)/sine_pcmgain_out.pcm
@@ -511,16 +653,18 @@ run-dec:
 	$(RUN) ./$(BIN11) -outfile:$(TEST_OUT)/sine_capturer.mp3 -samples:0
 	$(ECHO) $(RM) capturer_in.pcm
 	$(RUN) ./$(BIN14) -infile:$(TEST_INP)/hihat.ogg -outfile:$(TEST_OUT)/hihat_vorbis_dec_out.pcm
-	$(RUN) ./$(BIN18) -infile:$(TEST_INP)/sine.pcm -infile:$(TEST_INP)/sine.pcm -outfile:$(TEST_OUT)/mimo21_pcm_mix_out.pcm
+	$(RUN) ./$(BIN18) -infile:$(TEST_INP)/sine.pcm -infile:$(TEST_INP)/sine.pcm -outfile:$(TEST_OUT)/mimo21_mimo_mix_out.pcm
 	$(RUN) ./$(BIN20) -infile:$(TEST_INP)/hihat_1ch_16b_192kbps_cbr.mp3 -infile:$(TEST_INP)/hihat_1ch_16b_192kbps_cbr.mp3 -infile:$(TEST_INP)/hihat_1ch_16b_44.1kHz.adts -outfile:$(TEST_OUT)/playback_usecase_out1.pcm -outfile:$(TEST_OUT)/playback_usecase_out2.pcm
+	$(RUN) ./$(BIN21) -infile:$(TEST_INP)/testvector11-16000-1ch_trim.out -outfile:$(TEST_OUT)/opus_enc_out.bit
+	$(RUN) ./$(BIN22) -infile:$(TEST_INP)/opus51_trim.webm.ogg -outfile:$(TEST_OUT)/opus51_trim_out.pcm
 	$(RUN) ./$(BIN30) -infile:$(TEST_INP)/hihat.pcm -infile:$(TEST_INP)/sine.pcm -outfile:$(TEST_OUT)/rend_ref_port.aec_out0.pcm -outfile:$(TEST_OUT)/rend_ref_port.aec_out1.pcm
 	$(ECHO) $(MV) renderer_out.pcm $(TEST_OUT)/rend_ref_port.rend_out.pcm
 
 ### Add the test-application binary under the target 'clean' ###
 clean:
-	-$(RM) $(BIN1) $(BIN2) $(BIN3) $(BIN4) $(BIN5) $(BIN6) $(BIN7) $(BIN8) $(BIN9) $(BIN10) $(BIN11) $(BIN14) $(BRDBIN1) $(BRDBIN2) $(BRDBIN3) $(BRDBIN4) $(BRDBIN5) $(BRDBIN6) $(BRDBIN7) $(BRDBIN8) $(BRDBIN9) $(BRDBIN10) $(BRDBIN11) $(BRDBIN14)
+	-$(RM) $(BIN0) $(BIN1) $(BIN2) $(BIN3) $(BIN4) $(BIN5) $(BIN6) $(BIN7) $(BIN8) $(BIN9) $(BIN10) $(BIN11) $(BIN14) $(BIN21) $(BIN22) $(BRDBIN1) $(BRDBIN2) $(BRDBIN3) $(BRDBIN4) $(BRDBIN5) $(BRDBIN6) $(BRDBIN7) $(BRDBIN8) $(BRDBIN9) $(BRDBIN10) $(BRDBIN11) $(BRDBIN14)  $(BRDBIN21)  $(BRDBIN22)
 	-$(RM) $(OBJDIR)$(S)* map_*.txt
-	-$(RM) $(BIN18) $(BIN20) $(BIN30)
+	-$(RM) $(BIN18) $(BIN20) $(BIN30) $(BIN33) $(BIN34)
 
 ### Add to the variable containing the obj list, the complete list of library files (.a) required to build a particular test-application binary. ###
 comp_libs:
@@ -534,3 +678,5 @@ comp_libs:
 	$(eval LIBS_LIST11+=$(PLUGINLIBS_MP3_ENC))
 	$(eval LIBS_LIST14+=$(PLUGINLIBS_VORBIS_DEC))
 	$(eval LIBS_LIST20+=$(PLUGINLIBS_MP3_DEC) $(PLUGINLIBS_AAC_DEC) $(PLUGINLIBS_SRC_PP))
+	$(eval LIBS_LIST21+=$(PLUGINLIBS_OPUS_ENC))
+	$(eval LIBS_LIST22+=$(PLUGINLIBS_OPUS_DEC))
