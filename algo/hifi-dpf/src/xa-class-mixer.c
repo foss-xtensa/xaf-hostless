@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2015-2021 Cadence Design Systems Inc.
+* Copyright (c) 2015-2022 Cadence Design Systems Inc.
 *
 * Permission is hereby granted, free of charge, to any person obtaining
 * a copy of this software and associated documentation files (the
@@ -115,7 +115,7 @@ typedef struct XAMixer
     UWORD32                     sample_size;
 
     /* ...audio byte duration */
-    UWORD32                     factor;
+    UWORD64                     factor;
 
     /* ...presentation timestamp (in samples; local mixer scope) */
     UWORD32                 pts;
@@ -211,7 +211,7 @@ static inline XA_ERRORCODE xa_mixer_prepare_runtime(XAMixer *mixer)
     xf_message_t   *m = xf_msg_queue_head(&mixer->output.queue);
     xf_start_msg_t *msg = m->buffer;
     UWORD32             frame_size;
-    UWORD32             factor;
+    UWORD64             factor;
     
     /* ...query mixer parameters */
     XA_API(base, XA_API_CMD_GET_CONFIG_PARAM, XA_MIXER_CONFIG_PARAM_SAMPLE_RATE, &msg->sample_rate);
@@ -227,7 +227,7 @@ static inline XA_ERRORCODE xa_mixer_prepare_runtime(XAMixer *mixer)
     TRACE(INIT, _b("mixer[%p]::runtime init: f=%u, c=%u, w=%u, i=%u, o=%u"), mixer, msg->sample_rate, msg->channels, msg->pcm_width, msg->input_length[0], msg->output_length[0]);
 
     /* ...save sample size in bytes */
-    mixer->sample_size = msg->channels * (msg->pcm_width == 16 ? 2 : 4);
+    mixer->sample_size = msg->channels * ((msg->pcm_width == 8) ? 1 :((msg->pcm_width == 16) ? 2 : 4));
 
     /* ...calculate mixer frame duration; get upsample factor */
     XF_CHK_ERR(factor = xf_timebase_factor(msg->sample_rate), XA_MIXER_CONFIG_FATAL_RANGE);
@@ -238,9 +238,10 @@ static inline XA_ERRORCODE xa_mixer_prepare_runtime(XAMixer *mixer)
     /* ...set frame duration factor (converts number of bytes into timebase units) */
     mixer->factor = factor / mixer->sample_size;
 
-    TRACE(INIT, _b("ts-factor: %u (%u)"), mixer->factor, factor);
+    TRACE(INIT, _b("ts-factor: %llu (%llu)"), mixer->factor, factor);
 
-    BUG((mixer->factor * mixer->sample_size) != factor, _x("Freq mismatch: %u vs %u"), (mixer->factor * mixer->sample_size), factor);
+    /* ...factor must be a multiple */
+    XF_CHK_ERR(mixer->factor * mixer->sample_size == factor, XA_MIXER_CONFIG_FATAL_RANGE);
 
     /* ...set mixer frame duration */
     mixer->frame_duration = frame_size * factor; /* Note: mixer->factor, factor is for samples */
@@ -1235,7 +1236,7 @@ static int xa_mixer_terminate(xf_component_t *component, xf_message_t *m)
     {
         /* ...ignore component processing during component termination(rare case) */
         TRACE(OUTPUT, _b("component processing ignored.."));
-        return -1;
+        return 0;
     }
 
     if (m == xf_output_port_control_msg(&mixer->output))
@@ -1243,7 +1244,11 @@ static int xa_mixer_terminate(xf_component_t *component, xf_message_t *m)
         /* ...output port flushing complete; mark port is idle and terminate */
         xf_output_port_flush_done(&mixer->output);
         TRACE(OUTPUT, _b("mixer[%p] flush completed in terminate"), mixer);
+#ifdef XF_MSG_ERR_HANDLING
+        return XAF_UNREGISTER;
+#else
         return -1;
+#endif
     }
     else if (m->opcode == XF_FILL_THIS_BUFFER && xf_output_port_routed(&mixer->output))
     {
@@ -1295,8 +1300,11 @@ static int xa_mixer_destroy(xf_component_t *component, xf_message_t *m)
     /* ...destroy base object */
     xa_base_destroy(&mixer->base, XF_MM(sizeof(*mixer)), core);
 
-    /* ...complete the command with response */
-    xf_response_err(m_resp);
+    if (m_resp != NULL)
+    {
+        /* ...complete the command with response */
+        xf_response_err(m_resp);
+    }
 
     TRACE(INIT, _b("mixer[%p] destroyed"), mixer);
 

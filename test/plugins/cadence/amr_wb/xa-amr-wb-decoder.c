@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2015-2021 Cadence Design Systems Inc.
+* Copyright (c) 2015-2022 Cadence Design Systems Inc.
 *
 * Permission is hereby granted, free of charge, to any person obtaining
 * a copy of this software and associated documentation files (the
@@ -37,9 +37,11 @@
 #include "xa_type_def.h"
 /* ...debugging facility */
 #include "xf-debug.h"
+#include "audio/xa-audio-decoder-api.h"
+#ifndef PACK_WS_DUMMY
 #include "xa_amr_wb_codec_api.h"
 #include "xa_amr_wb_dec_definitions.h"
-#include "audio/xa-audio-decoder-api.h"
+#endif //PACK_WS_DUMMY
 
 #ifdef XAF_PROFILE
 #include "xaf-clk-test.h"
@@ -98,6 +100,7 @@ typedef struct XA_AMR_WB_Decoder
 #define XA_AMR_WB_FLAG_EOS_RECEIVED      (1 << 4)
 #define XA_AMR_WB_FLAG_COMPLETE          (1 << 5)
 
+#ifndef PACK_WS_DUMMY
 /*******************************************************************************
  * Supportive functions
  ******************************************************************************/
@@ -639,6 +642,24 @@ static XA_ERRORCODE xa_amr_wb_decoder_set_mem_ptr(XA_AMR_WB_Decoder *d, WORD32 i
 
     return XA_NO_ERROR;
 }
+#else //PACK_WS_DUMMY
+static XA_ERRORCODE xa_amr_wb_decoder_get_api_size(XA_AMR_WB_Decoder *d, WORD32 i_idx, pVOID pv_value) {return 0;};
+static XA_ERRORCODE xa_amr_wb_decoder_init(XA_AMR_WB_Decoder *d, WORD32 i_idx, pVOID pv_value) {return 0;};
+static XA_ERRORCODE xa_amr_wb_decoder_set_config_param(XA_AMR_WB_Decoder *d, WORD32 i_idx, pVOID pv_value) {return 0;};
+static inline XA_ERRORCODE xa_amr_wb_decoder_get_config_param(XA_AMR_WB_Decoder *d, WORD32 i_idx, pVOID pv_value) {return 0;};
+static XA_ERRORCODE xa_amr_wb_decoder_execute(XA_AMR_WB_Decoder *d, WORD32 i_idx, pVOID pv_value) {return 0;};
+static XA_ERRORCODE xa_amr_wb_decoder_set_input_bytes(XA_AMR_WB_Decoder *d, WORD32 i_idx, pVOID pv_value) {return 0;};
+static XA_ERRORCODE xa_amr_wb_decoder_get_output_bytes(XA_AMR_WB_Decoder *d, WORD32 i_idx, pVOID pv_value) {return 0;};
+static XA_ERRORCODE xa_amr_wb_decoder_get_curidx_input_buf(XA_AMR_WB_Decoder *d, WORD32 i_idx, pVOID pv_value) {return 0;};
+static XA_ERRORCODE xa_amr_wb_decoder_input_over(XA_AMR_WB_Decoder *d, WORD32 i_idx, pVOID pv_value) {return 0;};
+static XA_ERRORCODE xa_amr_wb_decoder_get_memtabs_size(XA_AMR_WB_Decoder *d, WORD32 i_idx, pVOID pv_value) {return 0;};
+static XA_ERRORCODE xa_amr_wb_decoder_set_memtabs_ptr(XA_AMR_WB_Decoder *d, WORD32 i_idx, pVOID pv_value) {return 0;};
+static XA_ERRORCODE xa_amr_wb_decoder_get_n_memtabs(XA_AMR_WB_Decoder *d, WORD32 i_idx, pVOID pv_value) {return 0;};
+static XA_ERRORCODE xa_amr_wb_decoder_get_mem_info_size(XA_AMR_WB_Decoder *d, WORD32 i_idx, pVOID pv_value) {return 0;};
+static XA_ERRORCODE xa_amr_wb_decoder_get_mem_info_alignment(XA_AMR_WB_Decoder *d, WORD32 i_idx, pVOID pv_value) {return 0;};
+static XA_ERRORCODE xa_amr_wb_decoder_get_mem_info_type(XA_AMR_WB_Decoder *d, WORD32 i_idx, pVOID pv_value) {return 0;};
+static XA_ERRORCODE xa_amr_wb_decoder_set_mem_ptr(XA_AMR_WB_Decoder *d, WORD32 i_idx, pVOID pv_value) {return 0;};
+#endif //PACK_WS_DUMMY
 
 /*******************************************************************************
  * API command hooks

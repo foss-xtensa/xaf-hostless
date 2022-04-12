@@ -17,7 +17,12 @@ xt-clang, xt-clang++ compiler (required for TFLM compilation)
 ======================================================================
 Building TFLM code for xtensa target on Linux
 ======================================================================
-Note: TFLM build requires GNU Make v3.82 or later.
+Note: TFLM build requires the following GNU tools
+    The versions recommnded are the ones on which it is tested
+    GNU Make v3.82
+    git v2.9.5
+    wget v1.14
+    curl v7.29
 
 This section describes how to build the TFLM library to be used with 
 XAF. Note that the TFLM compilation is only supported under Linux.

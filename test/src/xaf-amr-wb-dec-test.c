@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2015-2021 Cadence Design Systems Inc.
+* Copyright (c) 2015-2022 Cadence Design Systems Inc.
 *
 * Permission is hereby granted, free of charge, to any person obtaining
 * a copy of this software and associated documentation files (the
@@ -25,8 +25,10 @@
 #include <string.h>
 #include <errno.h>
 
+#ifndef PACK_WS_DUMMY
 #include "xa_amr_wb_codec_api.h"
 #include "xa_amr_wb_dec_definitions.h"
+#endif //PACK_WS_DUMMY
 #include "xaf-utils-test.h"
 #include "xaf-fio-test.h"
 
@@ -84,6 +86,7 @@ XA_ERRORCODE xa_keyword_detection_inference(xa_codec_handle_t var1, WORD32 var2,
 
 static int amr_wb_setup(void *p_decoder)
 {
+#ifndef PACK_WS_DUMMY
 #ifndef XA_DEC_INIT_WO_INP_TEST
     int param[6];
 
@@ -114,10 +117,14 @@ static int amr_wb_setup(void *p_decoder)
 
     return(xaf_comp_set_config(p_decoder, 4, &param[0]));
 #endif
+#else //PACK_WS_DUMMY
+    return 0;
+#endif //PACK_WS_DUMMY
 }
 
 static int get_comp_config(void *p_comp, xaf_format_t *comp_format)
 {
+#ifndef PACK_WS_DUMMY
     int param[6];
     int ret;
 
@@ -135,6 +142,7 @@ static int get_comp_config(void *p_comp, xaf_format_t *comp_format)
     comp_format->pcm_width = param[1];
     comp_format->sample_rate = param[3];
     comp_format->channels = param[5];
+#endif //PACK_WS_DUMMY
 
     return 0;
 }

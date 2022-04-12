@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2015-2021 Cadence Design Systems Inc.
+* Copyright (c) 2015-2022 Cadence Design Systems Inc.
 *
 * Permission is hereby granted, free of charge, to any person obtaining
 * a copy of this software and associated documentation files (the
@@ -874,7 +874,7 @@ static XA_ERRORCODE xa_base_process_event(XACodecBase *base, xf_message_t *m)
     UWORD32     shared = XF_MSG_SHARED(m->id);
 
     /* ... event processing at dst component */
-    if ((!XF_MSG_SRC_PROXY(m->id)) && (m->length != 0))
+    if ((!XF_MSG_SRC_PROXY(m->id)) && (m->length > 0))
     {
         /* ...even if actual buffer size is 0, extra bytes are allocated to carry the event_id, this check identifies that */
         if (m->length > sizeof(event_id)) 
@@ -908,10 +908,9 @@ static XA_ERRORCODE xa_base_process_event(XACodecBase *base, xf_message_t *m)
             pp_channel_info_curr = &p_channel_info_curr->next;
         }
    
-        /*... Check if channel is found in channel chain*/
-        XF_CHK_ERR(i < base->num_channels, XAF_INVALIDPTR_ERR);
+        /*... Channel must be found in the channel chain*/
+        BUG(i >= base->num_channels, _x("Event buffer source channel not found"));
 
-        /* ...channel look-up successful */
         channel_info = p_channel_info_curr;
 
         if (channel_info->delete_msg == NULL)
@@ -1024,7 +1023,11 @@ static int xa_base_command(xf_component_t *component, xf_message_t *m)
             base->cdata.cb = NULL;
         }
 #endif
+#ifdef XF_MSG_ERR_HANDLING
+        return XAF_UNREGISTER;    
+#else
         return -1;    
+#endif
     }
     
     /* ...check opcode is valid */
@@ -1045,7 +1048,7 @@ static int xa_base_command(xf_component_t *component, xf_message_t *m)
  ******************************************************************************/
 
 /* ...data processing scheduling */
-void xa_base_schedule(XACodecBase *base, UWORD32 dts)
+void xa_base_schedule(XACodecBase *base, UWORD64 dts)
 {
     if ((base->state & XA_BASE_FLAG_SCHEDULE) == 0)
     {
@@ -1091,12 +1094,23 @@ void xa_base_cancel(XACodecBase *base)
 
         /* ...and cancel scheduled codec task, if node is on the schedule-tree */
 #ifdef LOCAL_SCHED
-        if( (cd->n_workers && xf_sched_cancel(&cd->worker[base->component.priority].sched, &base->component.task))
-            || (!cd->n_workers && xf_sched_cancel(&cd->sched, &base->component.task))
-        )
+        /* ...for local-schedule tree or single DSP-thread, a schedule node must be on the sched-tree and never in the worker queue */
+        if(cd->n_workers)
+        {
+            if(xf_sched_cancel(&cd->worker[base->component.priority].sched, &base->component.task))
+            {
+                TRACE(EXEC, _b("codec[%p] processing cancelled priority:%d"), base, base->component.priority);
+            }
+        }
+        else
+        {
+            if(xf_sched_cancel(&cd->sched, &base->component.task))
+            {
+                TRACE(EXEC, _b("codec[%p] processing cancelled"), base);
+            }
+        }
 #else //LOCAL_SCHED
         if(xf_sched_cancel(&cd->sched, &base->component.task))
-#endif //LOCAL_SCHED
         {
             /* ...node is not on the schedule-tree, then it must be in workerQ */
             while(cd->worker)
@@ -1119,8 +1133,8 @@ void xa_base_cancel(XACodecBase *base)
                 return;
             }
         }
-
         TRACE(EXEC, _b("codec[%p] processing cancelled"), base);
+#endif //LOCAL_SCHED
     }
 }
 

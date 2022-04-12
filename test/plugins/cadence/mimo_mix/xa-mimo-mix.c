@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2015-2021 Cadence Design Systems Inc.
+* Copyright (c) 2015-2022 Cadence Design Systems Inc.
 *
 * Permission is hereby granted, free of charge, to any person obtaining
 * a copy of this software and associated documentation files (the
@@ -210,8 +210,8 @@ static XA_ERRORCODE xa_aec_do_execute_stereo_16bit(XAPcmAec *d)
       /* 2 in, 1 out */
       
       /* ...check I/O buffer */
-      XF_CHK_ERR(d->input[0], XA_MIMO_MIX_EXEC_FATAL_STATE);
-      XF_CHK_ERR(d->input[1], XA_MIMO_MIX_EXEC_FATAL_STATE);
+      XF_CHK_ERR(d->input[0], XA_MIMO_MIX_EXEC_NONFATAL_NO_DATA);
+      XF_CHK_ERR(d->input[1], XA_MIMO_MIX_EXEC_NONFATAL_NO_DATA);
       XF_CHK_ERR(d->output[0], XA_MIMO_MIX_EXEC_FATAL_STATE);
 
       WORD32   filled;

@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2015-2021 Cadence Design Systems, Inc.
+# Copyright (c) 2015-2022 Cadence Design Systems, Inc.
 # 
 # Permission is hereby granted, free of charge, to any person obtaining
 # a copy of this software and associated documentation files (the
@@ -28,6 +28,145 @@ Xtensa Audio Framework (XAF) - Hostless solution
 ======================================================================
 Revision History
 ======================================================================
+
+Version 2.10 API 2.1 : November 24, 2021
+
++ GA Release
+
++ Built with RI.6 tools
+
++ Compiled with xt-clang compiler
+
+
++ [J3058] In AEC23 plugin, added changes to return non-fatal error if
+  both input ports have 0 length input data. Also non-fatal error is
+  returned during execution if the output buffer is NULL.
+
++ [J3066] Added checks to prevent the input buffer fill level from
+  going negative in xf_input_port_consume function if input-port 
+  bypass is enabled and a corresponding CRITICAL trace print. 
+  This could happen if the component plugin incorrectly reports 
+  consumed bytes to be greater than the input bytes. 
+
++ [J3070] Corrected components' default priority calculation logic to
+  ensure that the default priority remains the highest priority among
+  the DSP worker threads.
+
++ [J3077] Modified TIMEBASE_FREQ value to support 1 to 16 channels;
+  1,2,3 or 4 bytes per PCM-sample and commonly used sample rates 
+  between 4000 to 192000 Hz. Also made changes in prepare_runtime 
+  function of all the classes to support 8 bits per PCM-sample.
+
++ Compiler warning fixes:
+  Fixed two "comparison of integers of different signs" warnings
+  observed with -Wextra build option in xf-proxy.c.
+
++ Testbench changes:
+  Corrected the argument type of comp_cycles passed to
+  compute_comp_mcps function from 'int' to 'long long'.
+
+----------------------------------------------------------------------
+
+Version 2.9_Beta API 2.1 : September 24, 2021
+
++ Built with RI.6 tools
+
++ Compiled with xt-clang compiler
+
++ Programmers Guide not updated
+
+
++ [J2564] Reverted workaround code change to address XOS thread
+  abort issue, since the the fix is available in newer tools version
+  (RI.6 and above).
+
++ [J2928] Extended set/get config APIs are also enabled for MIMO, Mixer
+  and Renderer classes.
+
++ [J2970] Added changes for graceful handling of fatal errors from 
+  message processing function xf_core_process_message().
+
++ [J2982] Corrected a condition check in "xf_worker_queue_purge" 
+  function.
+
++ [J3023] Fix to avoid scheduling of components after a fatal error
+  has occured.
+
++ [J3025] Fixed validation of frame_size to be multiple of
+  codec->sample_size by using the input-buffer length (PCM) instead
+  of the output buffer length for encoder components.
+
++ [J3028] Added checks to avoid NULL pointer access after component 
+  deletion in the local message submit logic(same thread components).
+
++ Optimization changes:
+  Optimized memory usage by removing base_cancel_pool related code 
+  when preemption is active and decentralized scheduling is used.
+
++ Robustness fixes:
+  1. Replaced XF_CHK_ERR with condition check and to print appropriate
+  trace message with WARNING tag instead of ERROR tag in the function
+  xa_base_event_handler().
+  2. Corrected return value if the component's scheduled processing 
+  occurs when it is in terminate state (all classes).
+  3. Corrected a trace print in xf_mm_alloc().
+  4. Fixed component state check in xaf_comp_get_status() API to
+  return the correct status to the application if the component delete
+  was already initiated.
+ 
++ Plugin changes:
+  1. Renamed opus encoder plugin directory from "opus" to "opus_enc".
+  2. Corrected mimo plugins' input and output buffer NULL check 
+  error values.
+
++ Testbench changes:
+  1. The following new testbench is added:
+     - xaf-full-duplex-opus-test.c (Opus Full Duplex Pipeline).
+  2. The following testbeches are no longer packed:
+     - xaf-full-duplex-test.c
+     - xaf-aac-dec-test.c
+     - xaf-src-test.c
+     - xaf-vorbis-dec-test.c
+     - xaf-opus-enc-test.c
+     - xaf-opus-dec-test.c
+  3. Added 2 more MCPS prints after testbench execution
+  XAF MCPS and Total MCPS (DSP Component MCPS + Framework MCPS).
+  4. Fixed memory corruption in xa_app_receive_events_cb() due to
+  write event array index exceeding maximum value.
+
++ Packaging changes:
+  Added support for the following multiple testbench project in xws
+  package which can be built and run out-of-the-box(15 test projects)
+     - testxa_af_hostless 
+     - testxa_af_mimo_mix 
+     - testxa_af_gain_renderer 
+     - testxa_af_capturer_gain 
+     - testxa_af_renderer_ref_port 
+     - testxa_af_dec* 
+     - testxa_af_dec_mix* 
+     - testxa_af_amr_wb_dec* 
+     - testxa_af_mp3_dec_rend*
+     - testxa_af_capturer_mp3_enc* 
+     - testxa_af_playback_usecase* 
+     - testxa_af_full_duplex_opus* 
+     - testxa_af_tflm_microspeech* 
+     - testxa_af_tflm_pd*
+     - testxa_af_tflm_microspeech_pd*
+  The test projects with(*) require dependent libraries, header files
+  and Additional Liker path to be provided.
+
++ Notes:
+  1. xaf_comp_set_config_ext and xaf_comp_get_config_ext API usage is
+  now demonstrated in the functions opus_dec_setup() and
+  get_opus_dec_config() of the newly added Opus Full Duplex testbench
+  (xaf-full-duplex-opus-test.c).
+  2. testxa_af_hostless project has common test_inp and test_out 
+  directory hosting input and output files of all the test projects in 
+  the package. Hence user must import this project into the workspace.
+  3. For testxa_af_full_duplex_opus, xa_opus_codec.a of only one of 
+  the opus_enc or opus_dec plugin needs to be provided for linking.
+
+----------------------------------------------------------------------
 
 Version 2.8_Alpha API 2.1 : August 11, 2021
 
@@ -629,4 +768,4 @@ Version 0.7 API 1.0 : December 17, 2015
 + Beta release.
 
 ----------------------------------------------------------------------
-2021-08-31:22:29:RI-2019.2:693100:687195:660711::
+2022-04-08:13:14:RI-2021.6:712830:726678:716953::

@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2015-2021 Cadence Design Systems Inc.
+* Copyright (c) 2015-2022 Cadence Design Systems Inc.
 *
 * Permission is hereby granted, free of charge, to any person obtaining
 * a copy of this software and associated documentation files (the
@@ -259,7 +259,11 @@ struct xf_handle
 /* ...events to application callback structure(relay) */
 typedef struct xa_app_submit_event_cb_s
 {
+#ifdef XF_MSG_ERR_HANDLING
+    WORD32 (*cb)(struct xa_app_submit_event_cb_s *, UWORD32 comp_id, UWORD32 event_id, pVOID event_buf, UWORD32 buf_size, WORD32 error);
+#else
     WORD32 (*cb)(struct xa_app_submit_event_cb_s *, UWORD32 comp_id, UWORD32 event_id, pVOID event_buf, UWORD32 buf_size);
+#endif //XF_MSG_ERR_HANDLING
 }xa_app_submit_event_cb_t;
 #endif
 

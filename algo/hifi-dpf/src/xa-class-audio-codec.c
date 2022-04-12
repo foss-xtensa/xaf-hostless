@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2015-2021 Cadence Design Systems Inc.
+* Copyright (c) 2015-2022 Cadence Design Systems Inc.
 *
 * Permission is hereby granted, free of charge, to any person obtaining
 * a copy of this software and associated documentation files (the
@@ -70,7 +70,7 @@ typedef struct XAAudioCodec
     UWORD32                     sample_size;
 
     /* ...audio sample duration */
-    UWORD32                     factor;
+    UWORD64                     factor;
 
     /* ...total number of produced audio frames since last reset */
     UWORD32                     produced;
@@ -140,7 +140,7 @@ static inline XA_ERRORCODE xa_codec_prepare_runtime(XAAudioCodec *codec)
     xf_message_t   *m = xf_msg_queue_head(&codec->output.queue);
     xf_start_msg_t *msg = m->buffer;
     UWORD32             frame_size, pcm_buffer_length;
-    UWORD32             factor;
+    UWORD64             factor;
 
     /* ...fill-in buffer parameters */
     XA_API(base, XA_API_CMD_GET_CONFIG_PARAM, XA_CODEC_CONFIG_PARAM_SAMPLE_RATE, &msg->sample_rate);
@@ -158,7 +158,7 @@ static inline XA_ERRORCODE xa_codec_prepare_runtime(XAAudioCodec *codec)
     BUG(msg->input_length[0] > codec->input.length, _x("Input buffer reallocation required: %u to %u"), codec->input.length, msg->input_length[0]);
 
     /* ...save sample size in bytes */
-    codec->sample_size = msg->channels * (msg->pcm_width == 16 ? 2 : 4);
+    codec->sample_size = msg->channels * ((msg->pcm_width == 8) ? 1 :((msg->pcm_width == 16) ? 2 : 4));
 
     /* ...sample size should be positive */
     XF_CHK_ERR(codec->sample_size > 0, XA_API_FATAL_INVALID_CMD_TYPE);
@@ -180,7 +180,8 @@ static inline XA_ERRORCODE xa_codec_prepare_runtime(XAAudioCodec *codec)
 
     TRACE(INIT, _b("ts-factor: %u (%u)"), codec->factor, factor);
 
-    BUG(codec->factor * codec->sample_size != factor, _x("Freq mismatch: %u vs %u"), codec->factor * codec->sample_size, factor);
+    /* ...factor must be a multiple */
+    XF_CHK_ERR(codec->factor * codec->sample_size == factor, XA_CODEC_CONFIG_FATAL_RANGE);
 
     /* ...pass response to caller (push out of output port) */
     xf_output_port_produce(&codec->output, sizeof(*msg));
@@ -1199,7 +1200,7 @@ static int xa_audio_codec_terminate(xf_component_t *component, xf_message_t *m)
     {
         /* ...ignore component processing during component termination(rare case) */
         TRACE(OUTPUT, _b("component processing ignored.."));
-        return -1;
+        return 0;
     }
     /* ...check if we received output port control message */
     else if (m == xf_output_port_control_msg(&codec->output))
@@ -1207,7 +1208,11 @@ static int xa_audio_codec_terminate(xf_component_t *component, xf_message_t *m)
         /* ...output port flushing complete; mark port is idle and terminate */
         xf_output_port_flush_done(&codec->output);
         TRACE(OUTPUT, _b("codec[%p] flush completed in terminate"), codec);
+#ifdef XF_MSG_ERR_HANDLING
+        return XAF_UNREGISTER;
+#else
         return -1;
+#endif
     }
     else if (m->opcode == XF_FILL_THIS_BUFFER)
     {
@@ -1254,8 +1259,11 @@ static int xa_audio_codec_destroy(xf_component_t *component, xf_message_t *m)
     /* ...deallocate all resources */
     xa_base_destroy(&codec->base, XF_MM(sizeof(*codec)), core);
 
-    /* ...complete the command with response */
-    xf_response_err(m_resp);
+    if (m_resp != NULL)
+    {
+        /* ...complete the command with response */
+        xf_response_err(m_resp);
+    }
 
     TRACE(INIT, _b("audio-codec[%p@%u] destroyed"), codec, core);
 

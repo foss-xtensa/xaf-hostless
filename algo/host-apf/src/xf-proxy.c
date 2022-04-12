@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2015-2021 Cadence Design Systems Inc.
+* Copyright (c) 2015-2022 Cadence Design Systems Inc.
 *
 * Permission is hereby granted, free of charge, to any person obtaining
 * a copy of this software and associated documentation files (the
@@ -318,7 +318,7 @@ static void * xf_proxy_thread(void *arg)
             BUG(msg.buffer == (void *)-1, _x("Invalid buffer address: %08x"), m.address);        
 
             /* ...retrieve information fields */
-            msg.id = XF_MSG_SRC(m.id), msg.opcode = m.opcode, msg.length = m.length;           
+            msg.id = XF_MSG_SRC(m.id), msg.opcode = m.opcode, msg.length = m.length, msg.error = m.error ;           
         
             TRACE(RSP, _b("R[%08x]:(%08x,%u,%08x,%d)"), m.id, m.opcode, m.length, m.address, m.error);
 
@@ -326,7 +326,11 @@ static void * xf_proxy_thread(void *arg)
             if (m.opcode == XF_EVENT)  
             {
                 /* ...submit the event to application via callback. */
+#ifdef XF_MSG_ERR_HANDLING
+                xf_g_ap->cdata->cb(xf_g_ap->cdata, XF_MSG_SRC_ID(msg.id), *(UWORD32*)m.address, (void *)m.address, m.length, m.error); 
+#else
                 xf_g_ap->cdata->cb(xf_g_ap->cdata, XF_MSG_SRC_ID(msg.id), *(UWORD32*)m.address, (void *)m.address, m.length); 
+#endif //XF_MSG_ERR_HANDLING
             }
             else 
 #endif
@@ -761,7 +765,7 @@ static inline int xf_prepare_ext_config(WORD32 *p_param, WORD32 num_param, void 
 {
     UWORD32                 message_size_total = 0;
     UWORD32                 desc_len;
-    UWORD32                 i, k;
+    WORD32                 i, k;
     xaf_ext_buffer_t *app_ext_buf, *xf_ext_buf;
 
     /* ...Querying buffer needed for sending message to DSP layer */
@@ -825,7 +829,7 @@ int xf_set_config_with_lock(xf_handle_t *comp, void *buffer, UWORD32 length, WOR
     xf_proxy_t             *proxy = comp->proxy;
     xf_user_msg_t           msg;
     UWORD32                 message_size_total;
-    UWORD32                 i, k;
+    WORD32                 i, k;
     
     xf_proxy_lock(proxy);
 

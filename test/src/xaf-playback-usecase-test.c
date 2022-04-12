@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2015-2021 Cadence Design Systems Inc.
+* Copyright (c) 2015-2022 Cadence Design Systems Inc.
 *
 * Permission is hereby granted, free of charge, to any person obtaining
 * a copy of this software and associated documentation files (the
@@ -28,10 +28,12 @@
 
 #include "audio/xa-pcm-split-api.h"
 #include "audio/xa-pcm-gain-api.h"
+#include "audio/xa-mixer-api.h"
+#ifndef PACK_WS_DUMMY
 #include "audio/xa_mp3_dec_api.h"
 #include "audio/xa_aac_dec_api.h"
-#include "audio/xa-mixer-api.h"
 #include "audio/xa_src_pp_api.h"
+#endif //PACK_WS_DUMMY
 #include "xaf-utils-test.h"
 #include "xaf-fio-test.h"
 
@@ -195,8 +197,10 @@ static int aac_setup(void *p_comp, xaf_format_t *p_format, int nvar_args, ...)
 
     va_start(varg_list, nvar_args);
 
+#ifndef PACK_WS_DUMMY
     param[0 * 2 + 0] = XA_AACDEC_CONFIG_PARAM_PCM_WDSZ;
     param[0 * 2 + 1] = p_format->pcm_width;
+#endif //PACK_WS_DUMMY
 
     probe_enabled = va_arg(varg_list, int);
     if (probe_enabled)
@@ -221,8 +225,10 @@ static int mp3_setup(void *p_comp, xaf_format_t *p_format, int nvar_args, ...)
 
     va_start(varg_list, nvar_args);
 
+#ifndef PACK_WS_DUMMY
     param[0 * 2 + 0] = XA_MP3DEC_CONFIG_PARAM_PCM_WDSZ;
     param[0 * 2 + 1] = p_format->pcm_width;
+#endif //PACK_WS_DUMMY
 
     probe_enabled = va_arg(varg_list, int);
     if (probe_enabled)
@@ -338,6 +344,7 @@ static int src_setup(void *p_comp, xaf_format_t *p_format, int nvar_args, ...)
     in_frame_size = XAF_INBUF_SIZE / (pcm_width_bytes*SRC_PP_NUM_CH*SRC_PP_MAX_SRC_FRAME_ADJUST);
     in_frame_size = (in_frame_size > SRC_PP_MAX_INPUT_CHUNK_LEN) ? SRC_PP_MAX_INPUT_CHUNK_LEN : in_frame_size;
 
+#ifndef PACK_WS_DUMMY
     param[0 * 2 + 0] = XA_SRC_PP_CONFIG_PARAM_INPUT_CHANNELS;
     param[0 * 2 + 1] = p_format->channels;
     param[1 * 2 + 0] = XA_SRC_PP_CONFIG_PARAM_INPUT_SAMPLE_RATE;
@@ -348,6 +355,7 @@ static int src_setup(void *p_comp, xaf_format_t *p_format, int nvar_args, ...)
     param[3 * 2 + 1] = in_frame_size;
     param[4 * 2 + 0] = XA_SRC_PP_CONFIG_PARAM_BYTES_PER_SAMPLE;
     param[4 * 2 + 1] = (pcm_width_bytes == 4) ? 3 : 2; //src library only supports 16 or MSB-aligned 24 bit input
+#endif //PACK_WS_DUMMY
 
     probe_enabled = va_arg(varg_list, int);
     if (probe_enabled)

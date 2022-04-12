@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2015-2021 Cadence Design Systems Inc.
+* Copyright (c) 2015-2022 Cadence Design Systems Inc.
 *
 * Permission is hereby granted, free of charge, to any person obtaining
 * a copy of this software and associated documentation files (the
@@ -21,6 +21,7 @@
 * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+#ifndef PACK_WS_DUMMY
 #include "tensorflow/lite/micro/kernels/micro_ops.h"
 #include "tensorflow/lite/micro/micro_error_reporter.h"
 #include "tensorflow/lite/micro/micro_interpreter.h"
@@ -28,6 +29,7 @@
 #include "tensorflow/lite/schema/schema_generated.h"
 #include "tensorflow/lite/version.h"
 #include "tensorflow/lite/c/common.h"
+#endif //PACK_WS_DUMMY
 
 /* Model data file */
 #include "person_detect_model_data.h"
@@ -57,6 +59,9 @@ XA_ERRORCODE xa_person_detect_inference(xa_codec_handle_t p_xa_module_obj, WORD3
 }
 #endif
 
+#ifdef PACK_WS_DUMMY
+XA_ERRORCODE xa_person_detect_inference(xa_codec_handle_t p_xa_module_obj, WORD32 i_cmd, WORD32 i_idx, pVOID pv_value) {return 0;};
+#else //PACK_WS_DUMMY
 
 #define TENSOR_ARENA_SIZE                   (136*1024)
 #define NUM_OPS                             (5)
@@ -145,4 +150,4 @@ XA_ERRORCODE xa_person_detect_inference(xa_codec_handle_t p_xa_module_obj, WORD3
 
     return map_error_code(error_code);
 }
-
+#endif //PACK_WS_DUMMY

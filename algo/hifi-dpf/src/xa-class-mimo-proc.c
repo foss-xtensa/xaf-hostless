@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2015-2021 Cadence Design Systems Inc.
+* Copyright (c) 2015-2022 Cadence Design Systems Inc.
 *
 * Permission is hereby granted, free of charge, to any person obtaining
 * a copy of this software and associated documentation files (the
@@ -167,7 +167,7 @@ typedef struct XAMimoProc
     UWORD32                     sample_size;
 
     /* ...audio sample duration */
-    UWORD32                     factor;
+    UWORD64                     factor;
 
     /* ...audio frame size in samples */
     //UWORD32                 frame_size;
@@ -385,7 +385,7 @@ static inline XA_ERRORCODE xa_mimo_proc_prepare_runtime(XAMimoProc *mimo_proc)
 {
     XACodecBase    *base = (XACodecBase *) mimo_proc;
     UWORD32             frame_size;
-    UWORD32             factor;
+    UWORD64             factor;
     UWORD32             i;
 	xf_message_t   *m;
 	xf_start_msg_t *msg;
@@ -430,7 +430,7 @@ static inline XA_ERRORCODE xa_mimo_proc_prepare_runtime(XAMimoProc *mimo_proc)
     msg->probe_length = (mimo_proc->probe_enabled) ? mimo_proc->probe.length : 0;
 
     /* ...save sample size in bytes */
-    mimo_proc->sample_size = msg->channels * (msg->pcm_width == 16 ? 2 : 4);
+    mimo_proc->sample_size = msg->channels * ((msg->pcm_width == 8) ? 1 :((msg->pcm_width == 16) ? 2 : 4));
 
     /* ...sample size should be positive */
     XF_CHK_ERR(mimo_proc->sample_size > 0, XA_API_FATAL_INVALID_CMD_TYPE);
@@ -447,9 +447,10 @@ static inline XA_ERRORCODE xa_mimo_proc_prepare_runtime(XAMimoProc *mimo_proc)
     /* ...set frame duration factor (converts number of bytes into timebase units) */
     mimo_proc->factor = factor / mimo_proc->sample_size;
     
-    TRACE(INIT, _b("ts-factor: %u (%u)"), mimo_proc->factor, factor);
+    TRACE(INIT, _b("ts-factor: %llu (%llu)"), mimo_proc->factor, factor);
 
-    BUG(mimo_proc->factor * mimo_proc->sample_size != factor, _x("Freq mismatch: %u vs %u"), mimo_proc->factor * mimo_proc->sample_size, factor);
+    /* ...factor must be a multiple */
+    XF_CHK_ERR(mimo_proc->factor * mimo_proc->sample_size == factor, XA_MIMO_PROC_CONFIG_FATAL_RANGE);
 
     if(mimo_proc->num_out_ports)
     {    
@@ -1809,7 +1810,7 @@ static int xa_mimo_proc_terminate(xf_component_t *component, xf_message_t *m)
     {
         /* ...ignore component processing during component termination(rare case) */
         TRACE(OUTPUT, _b("component processing ignored.."));
-        return -1;
+        return 0;
     }
 
     if(XF_MSG_DST_PORT(m->id) < mimo_proc->num_in_ports)
@@ -1837,7 +1838,11 @@ static int xa_mimo_proc_terminate(xf_component_t *component, xf_message_t *m)
         xa_out_track_set_flags(track, XA_OUT_TRACK_FLAG_FLUSHING_DONE);
         TRACE(OUTPUT, _b("mimo_proc[%p] flush completed for port[%d] in terminate"), mimo_proc, i);
         if (xa_mimo_proc_output_port_flush_done(mimo_proc))
+#ifdef XF_MSG_ERR_HANDLING
+            return XAF_UNREGISTER;
+#else
             return -1;
+#endif
 
         return 0;
     }
@@ -1895,8 +1900,11 @@ static int xa_mimo_proc_destroy(xf_component_t *component, xf_message_t *m)
     /* ...destroy base object */
     xa_base_destroy(&mimo_proc->base, XF_MM(sizeof(*mimo_proc)), core);
 
-    /* ...complete the command with response */
-    xf_response_err(m_resp);
+    if (m_resp != NULL)
+    {
+        /* ...complete the command with response */
+        xf_response_err(m_resp);
+    }
     
     TRACE(INIT, _b("mimo_proc[%p] destroyed"), mimo_proc);
 

@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2015-2021 Cadence Design Systems Inc.
+* Copyright (c) 2015-2022 Cadence Design Systems Inc.
 *
 * Permission is hereby granted, free of charge, to any person obtaining
 * a copy of this software and associated documentation files (the
@@ -21,6 +21,17 @@
 * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+#ifdef PACK_WS_DUMMY
+
+#include "tflm-inference-api.h"
+
+namespace {}  // namespace
+
+int inference_persistent_byte_size(int kTensorArenaSize) {return 0;};
+int inference_init(void *pPersist, void * pModel, int kTensorArenaSize, void *p_micro_op_resolver) {return 0;};
+int inference_exec_process(void *pIn, int inp_bytes, void *pOut, int *out_bytes, void **output_tensor, void *pPersist) {return 0;};
+
+#else //PACK_WS_DUMMY
 #include "tensorflow/lite/micro/kernels/micro_ops.h"
 #include "tensorflow/lite/micro/micro_error_reporter.h"
 #include "tensorflow/lite/micro/micro_interpreter.h"
@@ -116,6 +127,7 @@ int  inference_exec_process(void *pIn, int inp_bytes, void *pOut, int *out_bytes
 
     return kTfLiteOk;
 }
+#endif //PACK_WS_DUMMY
 
 #if 0
 int op_resolver_add_operator(void *pPersist, int tflm_operator)
