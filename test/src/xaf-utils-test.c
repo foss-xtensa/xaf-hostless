@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2015-2021 Cadence Design Systems Inc.
+* Copyright (c) 2015-2022 Cadence Design Systems Inc.
 *
 * Permission is hereby granted, free of charge, to any person obtaining
 * a copy of this software and associated documentation files (the
@@ -545,7 +545,7 @@ void *event_handler_entry(void *arg)
 }
 #endif
 
-double compute_comp_mcps(unsigned int num_bytes, int comp_cycles, xaf_format_t comp_format, double *strm_duration)
+double compute_comp_mcps(unsigned int num_bytes, long long comp_cycles, xaf_format_t comp_format, double *strm_duration)
 {
     double mcps;
     unsigned int num_samples;
@@ -562,7 +562,7 @@ double compute_comp_mcps(unsigned int num_bytes, int comp_cycles, xaf_format_t c
             break;
 
         default:
-            FIO_PRINTF(stdout,"Insufficient data to compute MCPS...\n");
+            FIO_PRINTF(stdout,"Insufficient PCM-Width data to compute MCPS %d ...\n", comp_format.pcm_width);
             return 0;
     }
 
@@ -587,19 +587,19 @@ double compute_comp_mcps(unsigned int num_bytes, int comp_cycles, xaf_format_t c
             break;
 
         default:
-            FIO_PRINTF(stdout,"Insufficient data to compute MCPS...\n");
+            FIO_PRINTF(stdout,"Insufficient sample rate data to compute MCPS %d ...\n", comp_format.sample_rate);
             return 0;
     }
 
     if(comp_format.channels > 32)
     {
-        FIO_PRINTF(stdout,"Insufficient data to compute MCPS...\n");
+        FIO_PRINTF(stdout,"Insufficient channels data to compute MCPS %d ...\n", comp_format.channels);
         return 0;
     }
 
     if( comp_cycles < 0 )
     {
-        FIO_PRINTF(stdout,"Insufficient data to compute MCPS...\n");
+        FIO_PRINTF(stdout,"Negative cycles data to compute MCPS %lld...\n", comp_cycles);
         return 0;
     }
 
@@ -639,14 +639,17 @@ int print_mem_mcps_info(mem_obj_t* mem_handle, int num_comp)
         frmwk_cycles =  frmwk_cycles - (dsp_comps_cycles) - (fread_cycles + fwrite_cycles);
         read_write_mcps = ((double)(fread_cycles + fwrite_cycles)/(strm_duration*1000000.0));
         mcps = ((double)tot_cycles/(strm_duration*1000000.0));
-        FIO_PRINTF(stdout,"Total MCPS                                   :  %f\n",mcps);
+        FIO_PRINTF(stdout,"Gross Total MCPS                             :  %f\n",mcps);
 
         FIO_PRINTF(stdout,"DSP component MCPS                           :  %f\n",dsp_mcps);
 
         FIO_PRINTF(stdout,"File Read/Write MCPS                         :  %f\n",read_write_mcps);
+
         mcps = ((double)frmwk_cycles/(strm_duration*1000000.0));
-        //mcps = mcps - dsp_mcps;
         FIO_PRINTF(stdout,"Framework MCPS                               :  %f\n\n",mcps);
+
+        FIO_PRINTF(stdout,"XAF MCPS                                     :  %f\n", mcps);
+        FIO_PRINTF(stdout,"Total MCPS (DSP + XAF)                       :  %f\n\n",(mcps + dsp_mcps));
     }
 #endif
 

@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2015-2021 Cadence Design Systems Inc.
+* Copyright (c) 2015-2022 Cadence Design Systems Inc.
 *
 * Permission is hereby granted, free of charge, to any person obtaining
 * a copy of this software and associated documentation files (the
@@ -305,7 +305,7 @@ void * xf_mm_alloc(xf_mm_pool_t *pool, UWORD32 size)
         xf_mm_insert_size(pool, b, size);
 
         xf_flx_unlock(&pool->lock);
-        TRACE(INFO, _b("Allocated: pool=%p buffer=%p size=%d"), pool, b, osize);
+        TRACE(INFO, _b("Allocated: pool=%p buffer=%p size=%d"), pool, (void *) b + size, osize);
         /* ...A-map remains intact; tail of the block goes to user */
         return (void *) b + size;
     }

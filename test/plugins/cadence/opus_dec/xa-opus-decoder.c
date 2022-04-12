@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2015-2021 Cadence Design Systems Inc.
+* Copyright (c) 2015-2022 Cadence Design Systems Inc.
 *
 * Permission is hereby granted, free of charge, to any person obtaining
 * a copy of this software and associated documentation files (the
@@ -40,8 +40,10 @@
 #include "xf-debug.h"
 #include "audio/xa-audio-decoder-api.h"
 #include "audio/xa-opus-decoder-api.h"
+#ifndef PACK_WS_DUMMY
 #include "audio/xa_ogg_lib_api.h"
 #include "opus_header.h"
+#endif //PACK_WS_DUMMY
 #include "xaf-api.h"
 
 #ifdef XAF_PROFILE
@@ -49,6 +51,7 @@
 extern clk_t dec_cycles;
 #endif
 
+#ifndef PACK_WS_DUMMY
 typedef struct XA_OPUS_Decoder
 {
 	   /* ... module state */
@@ -1209,6 +1212,18 @@ static XA_ERRORCODE (* const xa_opus_decoder_api[])(XA_OPUS_Decoder *, WORD32, p
     [XA_API_CMD_GET_MEM_INFO_TYPE]      = xa_opus_decoder_get_mem_info_type,
     [XA_API_CMD_SET_MEM_PTR]            = xa_opus_decoder_set_mem_ptr,
 };
+#else //PACK_WS_DUMMY
+typedef struct XA_OPUS_Decoder
+{
+    void *pdummy;
+}XA_OPUS_Decoder;
+static XA_ERRORCODE xa_opus_decoder_dummy(XA_OPUS_Decoder *d, WORD32 i_idx, pVOID pv_value){return 0;};
+
+static XA_ERRORCODE (* const xa_opus_decoder_api[])(XA_OPUS_Decoder *, WORD32, pVOID) =
+{
+    [XA_API_CMD_GET_API_SIZE] = xa_opus_decoder_dummy,
+};
+#endif //PACK_WS_DUMMY
 
 /* ...total numer of commands supported */
 #define XA_OPUS_DEC_API_COMMANDS_NUM   (sizeof(xa_opus_decoder_api) / sizeof(xa_opus_decoder_api[0]))

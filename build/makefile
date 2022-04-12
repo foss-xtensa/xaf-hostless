@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2015-2021 Cadence Design Systems, Inc.
+# Copyright (c) 2015-2022 Cadence Design Systems, Inc.
 # 
 # Permission is hereby granted, free of charge, to any person obtaining
 # a copy of this software and associated documentation files (the
@@ -33,6 +33,21 @@ XA_DISABLE_DEPRECATED_API ?= 0
 XA_DISABLE_EVENT ?= 0
 TFLM_SUPPORT ?= 0
 
+################################################################################
+# Basic configuration (if not given in setup script)
+################################################################################
+XA_MSGQ ?= 1
+XF_TRACE ?= 0
+XA_DISABLE_EVENT ?= 0
+
+tools_version_base=RI-2021.6
+tools_version_this=$(shell xt-run --show-config=xttools | awk 'BEGIN {FS="/"} {print $$(NF-1)}')
+tools_version_sorted = $(word 1, $(sort $(tools_version_base) $(tools_version_this)))
+ifeq ($(tools_version_sorted),  $(tools_version_base))
+#set for ools version on or above RI.6
+    CFLAGS += -D__TOOLS_RI6_PLUS__
+endif
+
 ifneq (,$(findstring RF-2015.2, $(XTENSA_SYSTEM)))
 # RF.2 toolchain
   CFLAGS += -D__TOOLS_RF2__
@@ -64,7 +79,7 @@ ifeq ($(XA_DISABLE_EVENT), 1)
    CFLAGS += -DXA_DISABLE_EVENT
 endif
 
-CFLAGS += -DLOCAL_SCHED=1 -DLOCAL_MSGQ=1
+CFLAGS += -DLOCAL_SCHED=1 -DLOCAL_MSGQ=1 -DXF_MSG_ERR_HANDLING=1
 
 vpath %.c $(ROOTDIR)/algo/hifi-dpf/src
 vpath %.c $(ROOTDIR)/algo/host-apf/src

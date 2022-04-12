@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2015-2021 Cadence Design Systems Inc.
+* Copyright (c) 2015-2022 Cadence Design Systems Inc.
 *
 * Permission is hereby granted, free of charge, to any person obtaining
 * a copy of this software and associated documentation files (the
@@ -25,7 +25,9 @@
 #include <string.h>
 #include <errno.h>
 
+#ifndef PACK_WS_DUMMY
 #include "audio/xa_mp3_dec_api.h"
+#endif //PACK_WS_DUMMY
 #include "audio/xa-renderer-api.h"
 #include "xaf-utils-test.h"
 #include "xaf-fio-test.h"
@@ -77,12 +79,16 @@ XA_ERRORCODE xa_keyword_detection_inference(xa_codec_handle_t var1, WORD32 var2,
 
 static int mp3_setup(void *p_decoder)
 {
+#ifndef PACK_WS_DUMMY
     int param[2];
 
     param[0] = XA_MP3DEC_CONFIG_PARAM_PCM_WDSZ;
     param[1] = MP3_DEC_PCM_WIDTH;
 
     return(xaf_comp_set_config(p_decoder, 1, &param[0]));
+#else //PACK_WS_DUMMY
+    return 0;
+#endif //PACK_WS_DUMMY
 }
 
 static int renderer_setup(void *p_renderer,xaf_format_t renderer_format)
@@ -101,6 +107,7 @@ static int renderer_setup(void *p_renderer,xaf_format_t renderer_format)
 
 static int get_comp_config(void *p_comp, xaf_format_t *comp_format)
 {
+#ifndef PACK_WS_DUMMY
     int param[6];
     int ret;
 
@@ -120,6 +127,7 @@ static int get_comp_config(void *p_comp, xaf_format_t *comp_format)
     comp_format->channels = param[1];
     comp_format->pcm_width = param[3];
     comp_format->sample_rate = param[5];
+#endif //PACK_WS_DUMMY
 
     return 0;
 }

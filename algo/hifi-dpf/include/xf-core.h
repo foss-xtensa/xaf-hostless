@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2015-2021 Cadence Design Systems Inc.
+* Copyright (c) 2015-2022 Cadence Design Systems Inc.
 *
 * Permission is hereby granted, free of charge, to any person obtaining
 * a copy of this software and associated documentation files (the
@@ -99,13 +99,14 @@ struct xf_worker {
     xf_msgq_t queue;
     xf_thread_t thread;
     UWORD32 core;
-    xf_msg_queue_t base_cancel_queue;
-    xf_msg_pool_t base_cancel_pool;
 #ifdef LOCAL_MSGQ
     xf_msg_queue_t local_msg_queue;
 #endif
 #ifdef LOCAL_SCHED
     xf_sched_t          sched;
+#else
+    xf_msg_queue_t base_cancel_queue;
+    xf_msg_pool_t base_cancel_pool;
 #endif
 };
 
@@ -150,7 +151,7 @@ typedef struct xf_core_data
     /* ...any debugging information? for memory allocation etc... ? */
 
     /* ...the default priority to be set on component creation, before its actual priority can be assigned */
-    UWORD32 component_default_priority;
+    UWORD32 component_default_priority_idx;
 
     /* ...worker thread scratch sizes */
     UWORD32 worker_thread_scratch_size[XAF_MAX_WORKER_THREADS];

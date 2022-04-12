@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2015-2021 Cadence Design Systems Inc.
+* Copyright (c) 2015-2022 Cadence Design Systems Inc.
 *
 * Permission is hereby granted, free of charge, to any person obtaining
 * a copy of this software and associated documentation files (the
@@ -25,7 +25,9 @@
 #include <string.h>
 #include <errno.h>
 
+#ifndef PACK_WS_DUMMY
 #include "audio/xa_mp3_enc_api.h"
+#endif //PACK_WS_DUMMY
 #include "audio/xa-capturer-api.h"
 #include "xaf-utils-test.h"
 #include "xaf-fio-test.h"
@@ -116,6 +118,7 @@ static int capturer_start_operation(void *p_capturer)
 
 static int mp3_enc_setup(void *p_encoder,xaf_format_t encoder_format)
 {
+#ifndef PACK_WS_DUMMY
     int param[6];
 
     param[0] = XA_MP3ENC_CONFIG_PARAM_PCM_WDSZ;
@@ -126,11 +129,15 @@ static int mp3_enc_setup(void *p_encoder,xaf_format_t encoder_format)
     param[5] = encoder_format.channels;
 
     return(xaf_comp_set_config(p_encoder, 3, &param[0]));
+#else //PACK_WS_DUMMY
+    return 0;
+#endif //PACK_WS_DUMMY
 }
 
 
 static int get_mp3_enc_get_config(void *p_comp, xaf_format_t *comp_format)
 {
+#ifndef PACK_WS_DUMMY
     int param[6];
     int ret;
 
@@ -147,6 +154,7 @@ static int get_mp3_enc_get_config(void *p_comp, xaf_format_t *comp_format)
     comp_format->channels = param[1];
     comp_format->pcm_width = param[3];
     comp_format->sample_rate = param[5];
+#endif //PACK_WS_DUMMY
 
     return 0;
 }

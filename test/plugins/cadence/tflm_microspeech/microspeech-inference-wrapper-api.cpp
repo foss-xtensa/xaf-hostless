@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2015-2021 Cadence Design Systems Inc.
+* Copyright (c) 2015-2022 Cadence Design Systems Inc.
 *
 * Permission is hereby granted, free of charge, to any person obtaining
 * a copy of this software and associated documentation files (the
@@ -21,6 +21,8 @@
 * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+#ifndef PACK_WS_DUMMY
+
 #include "tensorflow/lite/micro/kernels/micro_ops.h"
 #include "tensorflow/lite/micro/micro_error_reporter.h"
 #include "tensorflow/lite/micro/micro_interpreter.h"
@@ -35,6 +37,8 @@
 #include "tensorflow/lite/micro/examples/micro_speech/micro_features/micro_model_settings.h"
 #include "tensorflow/lite/micro/examples/micro_speech/recognize_commands.h"
 #include "tensorflow/lite/micro/examples/micro_speech/micro_features/micro_features_generator.h"
+
+#endif //PACK_WS_DUMMY
 
 /* Model data file */
 #include "microspeech_model_data.h"
@@ -71,6 +75,7 @@ int  microspeech_inference_exec_postprocess(void *output_buffer, void *output_te
 #define CONSUMED_kFeatureSliceSize           (40)
 #define PRODUCED_INFERENCE                   (12)
 
+#ifndef PACK_WS_DUMMY
 /* ...microspeech specific recognizer defined and used locally */
 static tflite::MicroErrorReporter microspeech_local_error_reporter;
 
@@ -208,3 +213,6 @@ XA_ERRORCODE xa_microspeech_inference(xa_codec_handle_t p_xa_module_obj, WORD32 
     return map_error_code(error_code);
 }
 
+#else //PACK_WS_DUMMY
+XA_ERRORCODE xa_microspeech_inference(xa_codec_handle_t p_xa_module_obj, WORD32 i_cmd, WORD32 i_idx, pVOID pv_value) { return 0;};
+#endif //PACK_WS_DUMMY

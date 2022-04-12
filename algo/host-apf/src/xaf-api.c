@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2015-2021 Cadence Design Systems Inc.
+* Copyright (c) 2015-2022 Cadence Design Systems Inc.
 *
 * Permission is hereby granted, free of charge, to any person obtaining
 * a copy of this software and associated documentation files (the
@@ -35,7 +35,7 @@
 
 #define XAF_4BYTE_ALIGN    4
 #define XAF_8BYTE_ALIGN    8
-#define XAF_32BYTE_ALIGN    32
+#define XAF_64BYTE_ALIGN    64
 #define XAF_DEV_AND_AP_STRUCT_MEM_SIZE \
    (sizeof(xf_ap_t) + (XAF_8BYTE_ALIGN-1) + \
    (sizeof(xaf_adev_t) + (XAF_4BYTE_ALIGN-1)))
@@ -314,7 +314,11 @@ static xf_app_event_channel_t * xaf_sync_chain_find_node_by_param(xaf_node_chain
 }
 
 /* ...receive the event from proxy and relay it to the application with matching component handle */
+#ifdef XF_MSG_ERR_HANDLING
+static XAF_ERR_CODE xaf_event_relay(xa_app_submit_event_cb_t *cdata, UWORD32 comp_id, UWORD32 event_id, void *event_buf, UWORD32 buf_size, WORD32 error)
+#else
 static XAF_ERR_CODE xaf_event_relay(xa_app_submit_event_cb_t *cdata, UWORD32 comp_id, UWORD32 event_id, void *event_buf, UWORD32 buf_size)
+#endif
 {
     xaf_adev_t *p_adev = container_of(cdata, xaf_adev_t, cdata);
     xaf_comp_t *p_comp = NULL;
@@ -353,11 +357,28 @@ static XAF_ERR_CODE xaf_event_relay(xa_app_submit_event_cb_t *cdata, UWORD32 com
             /* ...submit the event to application via callback */
             if (xf_g_ap->app_event_handler_cb)
             {
+#ifdef XF_MSG_ERR_HANDLING
+                if (error &&
+                    ((event_id == XF_CFG_COMP_ERR_FATAL) || (event_id == XF_CFG_COMP_ERR_ALL)))
+                {
+                    /* ...update error buffer with error code to prevent application accessing stale data */
+                    *(UWORD32*)(event_buf + sizeof(event_id)) = error;
+                }
+
+                xf_g_ap->app_event_handler_cb((void *)p_comp, event_id, (void *)((UWORD32)(event_buf + sizeof(event_id))), (buf_size - sizeof(event_id)), ((error) || (event_id == XF_CFG_COMP_ERR_FATAL) || (event_id == XF_CFG_COMP_ERR_ALL)));
+
+#else
                 xf_g_ap->app_event_handler_cb((void *)p_comp, event_id, (void *)((UWORD32)(event_buf + sizeof(event_id))), (buf_size - sizeof(event_id)), ((event_id == XF_CFG_COMP_ERR_FATAL) || (event_id == XF_CFG_COMP_ERR_ALL)));
+#endif
             }
 
+#ifdef XF_MSG_ERR_HANDLING
+            /* ...resend the buffer to DSP unless there's an error or the channel is inactive */
+            if (!error && ((xaf_sync_chain_get_node_state(&p_adev->event_chain, p_channel_curr)) == XF_EVENT_CHANNEL_STATE_ACTIVE))
+#else
             /* ...resend buffer to DSP, but check again to ensure channel is still active(rare case) */
             if ((xaf_sync_chain_get_node_state(&p_adev->event_chain, p_channel_curr)) == XF_EVENT_CHANNEL_STATE_ACTIVE)
+#endif
             {
                 XF_CHK_API(xf_command(&p_comp->handle, 0, XF_EVENT, event_buf, buf_size));
                 p_channel_curr->pending_buffers++;
@@ -543,12 +564,12 @@ XAF_ERR_CODE xaf_adev_open(pVOID *pp_adev, xaf_adev_config_t *pconfig)
 
 #if 1 //TENA_2352, TENA_2191
     XAF_CHK_MIN(audio_comp_buf_size, XA_AUDIO_COMP_BUF_SIZE_MIN);
-    XAF_CHK_ALIGN(audio_comp_buf_size, XAF_32BYTE_ALIGN);
+    XAF_CHK_ALIGN(audio_comp_buf_size, XAF_64BYTE_ALIGN);
 #endif
 
 #if 1 //TENA_2351, TENA_2193
     XAF_CHK_MIN(audio_frmwk_buf_size, XA_AUDIO_FRMWK_BUF_SIZE_MIN);
-    XAF_CHK_ALIGN(audio_frmwk_buf_size, XAF_32BYTE_ALIGN);
+    XAF_CHK_ALIGN(audio_frmwk_buf_size, XAF_64BYTE_ALIGN);
 #endif
 
     /* ...Thumb rule: DSP-thread priority should be less than proxy-thread priority */
@@ -600,19 +621,19 @@ XAF_ERR_CODE xaf_adev_open(pVOID *pp_adev, xaf_adev_config_t *pconfig)
     xf_g_dsp = (xf_dsp_t *) (((UWORD32)p_adev->p_dspMem + (XAF_8BYTE_ALIGN-1)) & ~(XAF_8BYTE_ALIGN-1));
 
 
-    size = audio_frmwk_buf_size + (XAF_32BYTE_ALIGN-1); 
+    size = audio_frmwk_buf_size + (XAF_64BYTE_ALIGN-1); 
     ret = xaf_malloc(&(p_adev->p_apSharedMem), size, XAF_MEM_ID_DEV);
     if(ret != XAF_NO_ERR)
         return ret;
-    xf_g_dsp->xf_ap_shmem_buffer = (UWORD8 *) (((UWORD32)p_adev->p_apSharedMem + (XAF_32BYTE_ALIGN-1)) & ~(XAF_32BYTE_ALIGN-1));
+    xf_g_dsp->xf_ap_shmem_buffer = (UWORD8 *) (((UWORD32)p_adev->p_apSharedMem + (XAF_64BYTE_ALIGN-1)) & ~(XAF_64BYTE_ALIGN-1));
     xf_g_dsp->xf_ap_shmem_buffer_size = audio_frmwk_buf_size;
 
 
-    size = (audio_comp_buf_size*XF_CFG_CORES_NUM_DSP) + (XAF_32BYTE_ALIGN-1); 
+    size = (audio_comp_buf_size*XF_CFG_CORES_NUM_DSP) + (XAF_64BYTE_ALIGN-1); 
     ret = xaf_malloc(&(p_adev->p_dspLocalBuff), size, XAF_MEM_ID_DEV);
     if(ret != XAF_NO_ERR)
         return ret;
-    xf_g_dsp->xf_dsp_local_buffer = (UWORD8 *) (((UWORD32)p_adev->p_dspLocalBuff + (XAF_32BYTE_ALIGN-1)) & ~(XAF_32BYTE_ALIGN-1));
+    xf_g_dsp->xf_dsp_local_buffer = (UWORD8 *) (((UWORD32)p_adev->p_dspLocalBuff + (XAF_64BYTE_ALIGN-1)) & ~(XAF_64BYTE_ALIGN-1));
     xf_g_dsp->xf_dsp_local_buffer_size = audio_comp_buf_size*XF_CFG_CORES_NUM_DSP;
     
 
@@ -687,12 +708,12 @@ XAF_ERR_CODE xaf_adev_open_deprecated(pVOID *pp_adev, WORD32 audio_frmwk_buf_siz
 
 #if 1 //TENA_2352, TENA_2191
     XAF_CHK_MIN(audio_comp_buf_size, XA_AUDIO_COMP_BUF_SIZE_MIN);
-    XAF_CHK_ALIGN(audio_comp_buf_size, XAF_32BYTE_ALIGN);
+    XAF_CHK_ALIGN(audio_comp_buf_size, XAF_64BYTE_ALIGN);
 #endif
 
 #if 1 //TENA_2351, TENA_2193
     XAF_CHK_MIN(audio_frmwk_buf_size, XA_AUDIO_FRMWK_BUF_SIZE_MIN);
-    XAF_CHK_ALIGN(audio_frmwk_buf_size, XAF_32BYTE_ALIGN);
+    XAF_CHK_ALIGN(audio_frmwk_buf_size, XAF_64BYTE_ALIGN);
 #endif
 
     /* ...Thumb rule: DSP-thread priority should be less than proxy-thread priority */
@@ -742,19 +763,19 @@ XAF_ERR_CODE xaf_adev_open_deprecated(pVOID *pp_adev, WORD32 audio_frmwk_buf_siz
     xf_g_dsp = (xf_dsp_t *) (((UWORD32)p_adev->p_dspMem + (XAF_8BYTE_ALIGN-1)) & ~(XAF_8BYTE_ALIGN-1));
 
 
-    size = audio_frmwk_buf_size + (XAF_32BYTE_ALIGN-1); 
+    size = audio_frmwk_buf_size + (XAF_64BYTE_ALIGN-1); 
     ret = xaf_malloc(&(p_adev->p_apSharedMem), size, XAF_MEM_ID_DEV);
     if(ret != XAF_NO_ERR)
         return ret;
-    xf_g_dsp->xf_ap_shmem_buffer = (UWORD8 *) (((UWORD32)p_adev->p_apSharedMem + (XAF_32BYTE_ALIGN-1)) & ~(XAF_32BYTE_ALIGN-1));
+    xf_g_dsp->xf_ap_shmem_buffer = (UWORD8 *) (((UWORD32)p_adev->p_apSharedMem + (XAF_64BYTE_ALIGN-1)) & ~(XAF_64BYTE_ALIGN-1));
     xf_g_dsp->xf_ap_shmem_buffer_size = audio_frmwk_buf_size;
 
 
-    size = (audio_comp_buf_size*XF_CFG_CORES_NUM_DSP) + (XAF_32BYTE_ALIGN-1); 
+    size = (audio_comp_buf_size*XF_CFG_CORES_NUM_DSP) + (XAF_64BYTE_ALIGN-1); 
     ret = xaf_malloc(&(p_adev->p_dspLocalBuff), size, XAF_MEM_ID_DEV);
     if(ret != XAF_NO_ERR)
         return ret;
-    xf_g_dsp->xf_dsp_local_buffer = (UWORD8 *) (((UWORD32)p_adev->p_dspLocalBuff + (XAF_32BYTE_ALIGN-1)) & ~(XAF_32BYTE_ALIGN-1));
+    xf_g_dsp->xf_dsp_local_buffer = (UWORD8 *) (((UWORD32)p_adev->p_dspLocalBuff + (XAF_64BYTE_ALIGN-1)) & ~(XAF_64BYTE_ALIGN-1));
     xf_g_dsp->xf_dsp_local_buffer_size = audio_comp_buf_size*XF_CFG_CORES_NUM_DSP;
     
 
@@ -1519,7 +1540,6 @@ XAF_ERR_CODE xaf_comp_get_status(pVOID adev_ptr, pVOID comp_ptr, xaf_comp_status
         xf_user_msg_t rmsg;
         /* ...wait until result is delivered */
         XF_CHK_API(xf_response_get(p_handle, &rmsg)); 
-        XAF_COMP_STATE_CHK(p_comp);
 
         if (rmsg.opcode == XF_FILL_THIS_BUFFER) 
         {
@@ -1535,7 +1555,6 @@ XAF_ERR_CODE xaf_comp_get_status(pVOID adev_ptr, pVOID comp_ptr, xaf_comp_status
                 {
                     /* ...wait until result is delivered */
                     XF_CHK_API(xf_response_get(p_handle, &rmsg)); 
-                    XAF_COMP_STATE_CHK(p_comp);
             
                     /* ...make sure response is expected */
                     XF_CHK_ERR((rmsg.opcode == XF_FILL_THIS_BUFFER && rmsg.buffer == xf_buffer_data(p_comp->start_buf)), XAF_API_ERR);
@@ -1591,7 +1610,12 @@ XAF_ERR_CODE xaf_comp_get_status(pVOID adev_ptr, pVOID comp_ptr, xaf_comp_status
                         p_comp->comp_status = XAF_EXEC_DONE;
                     }
                     else
-                        p_comp->comp_status = XAF_OUTPUT_READY;
+                    {
+                        if (p_comp->comp_state != XAF_COMP_RESET)    
+                            p_comp->comp_status = XAF_OUTPUT_READY;
+                        else
+                            p_comp->comp_status = XAF_EXEC_DONE;
+                    }
                 }
                 else
                 {
@@ -1601,7 +1625,12 @@ XAF_ERR_CODE xaf_comp_get_status(pVOID adev_ptr, pVOID comp_ptr, xaf_comp_status
                         TRACE(INFO, _b("PROBE R[%08x]:(%08x,%u,%p)"), rmsg.id, rmsg.opcode, rmsg.length, rmsg.buffer);
                     }
                     else
-                        p_comp->comp_status = XAF_PROBE_READY;
+                    {
+                        if (p_comp->comp_state != XAF_COMP_RESET)    
+                            p_comp->comp_status = XAF_PROBE_READY;
+                        else
+                            p_comp->comp_status = XAF_PROBE_DONE;
+                    }
                 }
 
                 p_comp->expect_out_cmd++;
@@ -1643,7 +1672,13 @@ XAF_ERR_CODE xaf_comp_get_status(pVOID adev_ptr, pVOID comp_ptr, xaf_comp_status
 
             	p_comp->comp_status = XAF_EXEC_DONE;
             }
-            else p_comp->comp_status = XAF_NEED_INPUT;
+            else
+            {
+                if (p_comp->comp_state != XAF_COMP_RESET)    
+                    p_comp->comp_status = XAF_NEED_INPUT;
+                else
+            	    p_comp->comp_status = XAF_EXEC_DONE;
+            }
         }
     }
     else if ((p_comp->comp_status == XAF_STARTING && p_comp->start_cmd_issued) ||

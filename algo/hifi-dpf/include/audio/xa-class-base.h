@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2015-2021 Cadence Design Systems Inc.
+* Copyright (c) 2015-2022 Cadence Design Systems Inc.
 *
 * Permission is hereby granted, free of charge, to any person obtaining
 * a copy of this software and associated documentation files (the
@@ -369,7 +369,7 @@ extern XA_ERRORCODE xa_base_get_param(XACodecBase *base, xf_message_t *m);
 extern XA_ERRORCODE xa_base_get_param_ext(XACodecBase *base, xf_message_t *m);
 
 /* ...data processing scheduling */
-extern void xa_base_schedule(XACodecBase *base, UWORD32 dts);
+extern void xa_base_schedule(XACodecBase *base, UWORD64 dts);
 
 /* ...cancel internal scheduling message */
 extern void xa_base_cancel(XACodecBase *base);

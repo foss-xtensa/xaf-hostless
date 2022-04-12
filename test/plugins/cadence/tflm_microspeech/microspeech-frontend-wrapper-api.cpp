@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2015-2021 Cadence Design Systems Inc.
+* Copyright (c) 2015-2022 Cadence Design Systems Inc.
 *
 * Permission is hereby granted, free of charge, to any person obtaining
 * a copy of this software and associated documentation files (the
@@ -56,6 +56,15 @@ int  microspeech_frontend_process(void *pIn, void *pOut);
 #endif  // TENSORFLOW_LITE_MICRO_EXAMPLES_MICRO_SPEECH_MAIN_FUNCTIONS_H_
 
 
+#ifdef PACK_WS_DUMMY
+namespace {
+
+}  // namespace
+
+int  microspeech_frontend_init() {return 0;}
+int  microspeech_frontend_process(void *pIn, void *pOut) {return 0;}
+
+#else //PACK_WS_DUMMY
 
 #include "tensorflow/lite/micro/examples/micro_speech/audio_provider.h"
 
@@ -112,4 +121,5 @@ int  microspeech_frontend_process(void *pIn, void *pOut)
 
     return generate_status;
 }
+#endif //PACK_WS_DUMMY
 

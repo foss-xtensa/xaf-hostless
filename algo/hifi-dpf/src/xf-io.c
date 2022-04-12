@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2015-2021 Cadence Design Systems Inc.
+* Copyright (c) 2015-2022 Cadence Design Systems Inc.
 *
 * Permission is hereby granted, free of charge, to any person obtaining
 * a copy of this software and associated documentation files (the
@@ -273,11 +273,21 @@ void xf_input_port_consume(xf_input_port_t *port, UWORD32 n)
     /* ...check whether input port is in bypass mode */
     if (xf_input_port_bypass(port))
     {
-        /* ...port is in bypass mode; advance access pointer */
-        port->remaining -= n;
+        if (port->remaining >= n)
+        {
+            /* ...port is in bypass mode; advance access pointer */
+            port->remaining -= n;
 
-        /* ...advance message buffer pointer */
-        port->access += n;
+            /* ...advance message buffer pointer */
+            port->access += n;
+        }
+        else
+        {
+            TRACE(CRITICAL, _b("input-port[%p] consumed %d is greater than available %d"), port, n, port->remaining);
+            port->access += port->remaining;
+
+            port->remaining = 0;
+        }
     }
     else if (port->filled > n)
     {

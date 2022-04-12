@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2015-2021 Cadence Design Systems Inc.
+* Copyright (c) 2015-2022 Cadence Design Systems Inc.
 *
 * Permission is hereby granted, free of charge, to any person obtaining
 * a copy of this software and associated documentation files (the
@@ -99,6 +99,7 @@ typedef enum {
     XAF_API_ERR         = -5,
     XAF_TIMEOUT_ERR     = -6,   // Get status timeout
     XAF_MEMORY_ERR      = -7,   // Memory allocation or availability error
+    XAF_NUM_ERRS        = -8,   // Make sure this is always the last one
 } XAF_ERR_CODE;
 
 typedef enum {
